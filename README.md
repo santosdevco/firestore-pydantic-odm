@@ -1,10 +1,7 @@
-A continuación te presento un ejemplo de README bastante completo para tu librería:
 
----
+# Firestore Pydantic ODM
 
-# Firestore Pydanctic ODM
-
-**Firestore Pydanctic ODM** es una librería para interactuar con Google Cloud Firestore de forma sencilla y eficiente. Utiliza [Pydantic](https://pydantic-docs.helpmanual.io/) para la validación y serialización de datos, y ofrece soporte para operaciones asíncronas, batch writes, transacciones, paginación, proyecciones y más.  
+**Firestore Pydantic ODM** es una librería para interactuar con Google Cloud Firestore de forma sencilla y eficiente. Utiliza [Pydantic](https://pydantic-docs.helpmanual.io/) para la validación y serialización de datos y ofrece soporte para operaciones asíncronas, batch writes, transacciones, paginación, proyecciones y más.
 
 Esta librería está diseñada para facilitar el desarrollo de aplicaciones que requieren almacenar y consultar datos en Firestore, ofreciendo una interfaz Pythonic y desacoplada que permite cambiar fácilmente el cliente (por ejemplo, para usar emuladores o mocks en testing).
 
@@ -15,7 +12,7 @@ Esta librería está diseñada para facilitar el desarrollo de aplicaciones que 
 - **Consultas Avanzadas:** Realiza búsquedas con filtros, proyecciones (seleccionar solo ciertos campos) y ordenación.
 - **Batch Operations y Transacciones:** Agrupa múltiples operaciones de escritura y ejecuta transacciones de forma atómica para mayor eficiencia y coherencia.
 - **Soporte para Emulador y Testing:** Configura de forma sencilla el uso del emulador de Firestore o integra mocks para pruebas unitarias.
-- **Fácil Integración:** Diseñada para integrarse sin problemas en cualquier proyecto Python.
+- **Fácil Integración:** Se integra sin problemas en cualquier proyecto Python.
 
 ## Instalación
 
@@ -23,7 +20,7 @@ Esta librería está diseñada para facilitar el desarrollo de aplicaciones que 
 
 1. Clona el repositorio:
    ```bash
-   git clone  https://github.com/santosdevco/firestore-pydantic-odm
+   git clone https://github.com/santosdevco/firestore-pydantic-odm
    cd firestore_pydantic_odm
    ```
 
@@ -202,7 +199,3 @@ El archivo `pytest.ini` y `conftest.py` (ubicado en la raíz o en el directorio 
 ## Licencia
 
 Distribuido bajo la Licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más detalles.
-
----
-
-Este README abarca la descripción general, la instalación, el uso, la estructura del proyecto, pruebas y cómo contribuir. Puedes ampliarlo o ajustarlo a medida que evolucione tu librería. ¡Éxito en tu proyecto!
