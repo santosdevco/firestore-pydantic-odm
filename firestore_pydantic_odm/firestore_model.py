@@ -1,10 +1,17 @@
 import logging
 from typing import List, Tuple, Any, Optional, AsyncGenerator, Type, Union
 from pydantic import BaseModel, Field
-from .enums import BatchOperation
+from .enums import BatchOperation,OrderByDirection,FirestoreOperators
 from .firestore_client import FirestoreDB
 from .firestore_fields import FirestoreQueryMetaclass,FirestoreField
 from google.cloud.firestore_v1 import AsyncClient
+
+
+# Alias de tipo para el primer elemento de la tupla
+FieldType = Union[str, FirestoreField]
+# Alias de tipo para la tupla
+FieldOrderType = Tuple[FieldType, OrderByDirection]
+
 
 logger = logging.getLogger(__name__)
 
@@ -173,12 +180,13 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
     # --------------------------------------------------------------------------
     # Find (generador asíncrono)
     # --------------------------------------------------------------------------
+    
     @classmethod
     async def find(
         cls,
-        filters: List[Tuple[str, str, Any]] = None,
+        filters: List[Tuple[FieldType, FirestoreOperators, Any]] = None,
         projection: Optional[Type[BaseModel]] = None,
-        order_by: Optional[Union[str, FirestoreField]] = None,
+        order_by: Optional[Union[FieldType, FieldOrderType]] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> AsyncGenerator[Union["BaseFirestoreModel",Type[BaseModel]], None]:
@@ -201,11 +209,17 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         query = cls._build_query(db_client, filters=filters, projection=projection)
 
         # Ordenación
-        if order_by:
+        order_by_kwargs = {}
+        if order_by :
+            if type(order_by) == tuple:
+                order_by_field,direction=order_by
+                order_by_kwargs={"direction":direction}
+            else:
+                order_by_field = order_by
             # Si es un FirestoreField, lo convertimos a string.
-            if isinstance(order_by, FirestoreField):
+            if isinstance(order_by_field, FirestoreField):
                 order_by = str(order_by)
-            query = query.order_by(order_by)
+            query = query.order_by(order_by,**order_by_kwargs)
 
         # Paginación
         if offset is not None:

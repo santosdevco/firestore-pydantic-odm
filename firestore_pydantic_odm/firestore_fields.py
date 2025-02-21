@@ -1,5 +1,5 @@
 from typing import Any, List
-
+from .enums import FirestoreOperators
 class FirestoreField:
     """
     Descriptor que, al hacer MyModel.field a nivel de clase,
@@ -25,32 +25,35 @@ class FirestoreField:
         return hash(self.field_name)
 
     def __eq__(self, other):
-        return (self.field_name, "==", other)
+        return (self.field_name, FirestoreOperators.EQ, other)
 
     def __ne__(self, other):
-        return (self.field_name, "!=", other)
+        return (self.field_name, FirestoreOperators.NE, other)
 
     def __lt__(self, other):
-        return (self.field_name, "<", other)
+        return (self.field_name, FirestoreOperators.LT, other)
 
     def __le__(self, other):
-        return (self.field_name, "<=", other)
+        return (self.field_name, FirestoreOperators.LTE, other)
 
     def __gt__(self, other):
-        return (self.field_name, ">", other)
+        return (self.field_name, FirestoreOperators.GT, other)
 
     def __ge__(self, other):
-        return (self.field_name, ">=", other)
+        return (self.field_name, FirestoreOperators.GTE, other)
 
     # Operadores específicos de Firestore
     def in_(self, values: List[Any]) -> tuple:
-        return (self.field_name, "in", values)
+        return (self.field_name, FirestoreOperators.IN, values)
+    # Operadores específicos de Firestore
+    def not_in_(self, values: List[Any]) -> tuple:
+        return (self.field_name, FirestoreOperators.NOT_IN, values)
 
     def array_contains(self, value: Any) -> tuple:
-        return (self.field_name, "array_contains", value)
+        return (self.field_name, FirestoreOperators.ARRAY_CONTAINS, value)
 
     def array_contains_any(self, values: List[Any]) -> tuple:
-        return (self.field_name, "array_contains_any", values)
+        return (self.field_name, FirestoreOperators.ARRAY_CONTAINS_ANY, values)
 
 
 from pydantic.main import ModelMetaclass

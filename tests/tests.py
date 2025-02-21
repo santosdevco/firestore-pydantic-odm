@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, AsyncMock
 from typing import Any, Tuple, List, Optional, Union, AsyncGenerator, Type
 
 # Ajusta la ruta según tu estructura real.
-from firestore_model import *
+from firestore_pydantic_odm import *
 
 # -----------------------------------------------------------------------------
 # 1. Modelo de ejemplo para pruebas
