@@ -1,0 +1,8 @@
+fastapi==0.70.0
+fastapi-socketio==0.0.9
+uvicorn==0.15.0
+gunicorn
+google-cloud-aiplatform>=1.38
+google-cloud-firestore
+pytest
+pytest_asyncio

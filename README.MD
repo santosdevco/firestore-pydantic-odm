@@ -2,7 +2,7 @@ A continuación te presento un ejemplo de README bastante completo para tu libre
 
 ---
 
-# Mi Firestore ODM
+# Firestore Pydanctic ODM
 
 **Firestore Pydanctic ODM** es una librería para interactuar con Google Cloud Firestore de forma sencilla y eficiente. Utiliza [Pydantic](https://pydantic-docs.helpmanual.io/) para la validación y serialización de datos, y ofrece soporte para operaciones asíncronas, batch writes, transacciones, paginación, proyecciones y más.  
 
@@ -23,7 +23,7 @@ Esta librería está diseñada para facilitar el desarrollo de aplicaciones que 
 
 1. Clona el repositorio:
    ```bash
-   git clone https://github.com/tu_usuario/firestore_pydantic_odm.git
+   git clone  https://github.com/santosdevco/firestore-pydantic-odm
    cd firestore_pydantic_odm
    ```
 
