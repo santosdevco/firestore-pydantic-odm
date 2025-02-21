@@ -39,7 +39,7 @@ jobs:
           # Con OIDC, el action obtiene el token mediante el id-token de GitHub Actions;
           # no es necesario un secret de PyPI.
           # password: ${{ steps.pypi-token.outputs.token }}
-          password: ${{ secrests.PIPL_TOKEN }}
+          password: ${{ secrets.PIPL_TOKEN }}
         env:
           PYPI_PROJECT_NAME: "firestore-pydantic-odm"
           PYPI_OWNER: "santosdevco"
