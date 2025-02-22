@@ -108,7 +108,7 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         doc_ref = db_client.collection(self.collection_name).document(self.id)
 
         if include:
-            updates = self.dict(exclude={"id"}, include=include, exclude_none=True, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
+            updates = self.dict(exclude={"id"}, include=include, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
         else:
             updates = self.dict(exclude={"id"}, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
 
