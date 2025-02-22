@@ -1,5 +1,10 @@
 from typing import Any, List
 from .enums import FirestoreOperators
+# from google.cloud import firestore
+from google.cloud.firestore_v1.field_path import FieldPath
+
+
+
 class FirestoreField:
     """
     Descriptor que, al hacer MyModel.field a nivel de clase,
@@ -57,14 +62,14 @@ class FirestoreField:
 
 
 from pydantic.main import ModelMetaclass
-
 class FirestoreQueryMetaclass(ModelMetaclass):
     def __new__(mcs, name, bases, namespace):
         cls = super().__new__(mcs, name, bases, namespace)
 
-        # Insertar FirestoreField en cada campo pydantic
-        if hasattr(cls, "__fields__"):
-            for field_name, model_field in cls.__fields__.items():
-                alias = model_field.alias or field_name
-                setattr(cls, field_name, FirestoreField(alias))
+        # Verificar si la clase tiene campos de Pydantic
+        fields = getattr(cls, "__fields__", {})
+        for field_name, model_field in fields.items():
+            alias = FieldPath.document_id() if field_name == "id" else model_field.alias or field_name
+            setattr(cls, field_name, FirestoreField(alias))
+
         return cls

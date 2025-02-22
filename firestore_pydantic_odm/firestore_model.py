@@ -225,7 +225,6 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
                     field = str(field)
                 query = query.order_by(field,**order_by_kwargs)
 
-            logger.info("order_by_kwargs")
         # Paginación
         if offset is not None:
             query = query.offset(offset)
