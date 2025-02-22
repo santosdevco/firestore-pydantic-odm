@@ -166,15 +166,15 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         db_client = cls._db.client
 
         query = cls._build_query(db_client, filters=filters)
-        # Ejemplo usando count() (si tu versión de la librería lo soporta)
         try:
             # Firestore 2.11+ en adelante
             count_snapshot = await query.count().get()
             # Devuelve una lista de agregaciones; la primera es count
             return count_snapshot[0][0].value
         except AttributeError:
+            logger.warning("Firestore: Performing count downloading all items with empty select")
             # Si tu librería no soporta count(), fallback manual
-            docs = await query.get()
+            docs = await query.select([]).get()
             return len(docs)
 
     # --------------------------------------------------------------------------
@@ -186,7 +186,7 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         cls,
         filters: List[Tuple[FieldType, FirestoreOperators, Any]] = None,
         projection: Optional[Type[BaseModel]] = None,
-        order_by: Optional[Union[FieldType, FieldOrderType]] = None,
+        order_by: Optional[Union[List[Union[FieldType, FieldOrderType]],Union[FieldType, FieldOrderType]]] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> AsyncGenerator[Union["BaseFirestoreModel",Type[BaseModel]], None]:
@@ -209,18 +209,23 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         query = cls._build_query(db_client, filters=filters, projection=projection)
 
         # Ordenación
-        order_by_kwargs = {}
         if order_by :
-            if type(order_by) == tuple:
-                order_by_field,direction=order_by
-                order_by_kwargs={"direction":direction}
-            else:
-                order_by_field = order_by
-            # Si es un FirestoreField, lo convertimos a string.
-            if isinstance(order_by_field, FirestoreField):
-                order_by = str(order_by)
-            query = query.order_by(order_by,**order_by_kwargs)
+            if type(order_by) != list:
+                order_by= [order_by]
+            for order_by_field in order_by:
+                order_by_kwargs = {}
 
+                if type(order_by_field) == tuple:
+                    field,direction=order_by_field
+                    order_by_kwargs={"direction":str(direction)}
+                else:
+                    field = order_by_field
+                # Si es un FirestoreField, lo convertimos a string.
+                if isinstance(field, FirestoreField):
+                    field = str(field)
+                query = query.order_by(field,**order_by_kwargs)
+
+            logger.info("order_by_kwargs")
         # Paginación
         if offset is not None:
             query = query.offset(offset)
@@ -243,7 +248,7 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         cls,
         filters: List[Tuple[str, str, Any]],
         projection: Optional[Type[BaseModel]] = None,
-        order_by: Optional[Union[str, FirestoreField]] = None,
+        order_by: Optional[Union[FieldType, FieldOrderType]] = None,
     ) -> Optional["BaseFirestoreModel"]:
         """
         Retorna un único documento que cumpla los filtros (o None si no hay).
@@ -284,6 +289,7 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
                 select_fields = list(projection.model_fields.keys())  # Pydantic v2
             else:
                 select_fields = list(projection.schema()["properties"].keys())  # Pydantic v1
+            logger.debug(f"Build Query: select fields: {select_fields}")
             query = query.select(select_fields)
 
         return query

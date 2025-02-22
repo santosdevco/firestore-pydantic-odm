@@ -21,4 +21,5 @@ class FirestoreOperators(str,Enum):
 class OrderByDirection(str,Enum):
     DESCENDING="DESCENDING"
     ASCENDING="ASCENDING"
-
+    def __str__(self):
+        return self.value

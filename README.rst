@@ -161,7 +161,7 @@ Realiza búsquedas utilizando filtros:
 
 .. code:: python
 
-   async for user in User.find(filters=[(User.name, "==", "Alice")]):
+   async for user in User.find(filters=[User.name == "Alice"]):
        print(user)
 
 Buscar un Único Documento
@@ -169,7 +169,7 @@ Buscar un Único Documento
 
 .. code:: python
 
-   user = await User.find_one(filters=[(User.email, "==", "alice@example.com")])
+   user = await User.find_one(filters=[User.email ==  "alice@example.com"])
 
 Usar Proyecciones
 ^^^^^^^^^^^^^^^^^
@@ -181,10 +181,9 @@ Si solo necesitas ciertos campos, puedes usar un modelo de proyección:
    from pydantic import BaseModel
 
    class UserProjection(BaseModel):
-       id: str
        name: str
 
-   async for user in User.find(filters=[(User.name, "==", "Alice")], projection=UserProjection):
+   async for user in User.find(filters=[User.name ==  "Alice"], projection=UserProjection):
        print(user)
 
 Batch Operations y Transacciones
@@ -204,17 +203,6 @@ Operaciones en Batch
    ]
 
    await User.batch_write(ops)
-
-Transacciones
-^^^^^^^^^^^^^
-
-.. code:: python
-
-   async def transaction_func(transaction, user: User):
-       # Realiza operaciones dentro de la transacción
-       await transaction.update(user.id, {"email": "updated@example.com"})
-
-   result = await User.run_in_transaction(transaction_func, user)
 
 Testing
 -------
