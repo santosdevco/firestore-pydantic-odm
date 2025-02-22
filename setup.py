@@ -7,7 +7,7 @@ long_description = (this_directory / "README.rst").read_text(encoding='utf-8')
 
 setup(
     name="firestore_pydantic_odm",
-    version="0.1.2",
+    version="0.1.3",
     description="ODM para Firestore utilizando Pydantic y operaciones asíncronas",
     long_description=long_description,
     long_description_content_type='text/x-rst',
