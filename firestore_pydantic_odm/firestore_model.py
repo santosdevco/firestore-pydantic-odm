@@ -74,7 +74,7 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
     # --------------------------------------------------------------------------
     # CRUD Asíncrono (create/update/delete)
     # --------------------------------------------------------------------------
-    async def save(self) -> "BaseFirestoreModel":
+    async def save(self,exclude_none=True,by_alias=True,exclude_unset=True) -> "BaseFirestoreModel":
         """
         Crea o sobrescribe el documento en Firestore de manera asíncrona.
         """
@@ -82,7 +82,7 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
             raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
         db_client = self._db.client
 
-        data_to_save = self.dict(exclude={"id"}, exclude_none=True)
+        data_to_save = self.dict(exclude={"id"}, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
         collection_ref = db_client.collection(self.collection_name)
 
         if not self.id:
@@ -94,7 +94,7 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         await doc_ref.set(data_to_save)
         return self
 
-    async def update(self, include: Optional[set] = None) -> "BaseFirestoreModel":
+    async def update(self, include: Optional[set] = None,exclude_none=True,by_alias=True,exclude_unset=True) -> "BaseFirestoreModel":
         """
         Actualiza campos en un documento existente en Firestore.
         """
@@ -108,9 +108,9 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         doc_ref = db_client.collection(self.collection_name).document(self.id)
 
         if include:
-            updates = self.dict(exclude={"id"}, include=include, exclude_none=True)
+            updates = self.dict(exclude={"id"}, include=include, exclude_none=True, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
         else:
-            updates = self.dict(exclude={"id"}, exclude_none=True)
+            updates = self.dict(exclude={"id"}, exclude_none=True, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
 
         logger.debug(f"Update: {self.collection_name} - id={self.id}, updates={updates}")
         if updates:
