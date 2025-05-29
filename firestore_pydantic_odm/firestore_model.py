@@ -1,62 +1,60 @@
 import logging
 from typing import List, Tuple, Any, Optional, AsyncGenerator, Type, Union
 from pydantic import BaseModel, Field
-from .enums import BatchOperation,OrderByDirection,FirestoreOperators
+from .enums import BatchOperation, OrderByDirection, FirestoreOperators
 from .firestore_client import FirestoreDB
-from .firestore_fields import FirestoreQueryMetaclass,FirestoreField
+from .firestore_fields import FirestoreQueryMetaclass, FirestoreField
 from google.cloud.firestore_v1 import AsyncClient
 
-
-# Alias de tipo para el primer elemento de la tupla
+# Alias for the first element in order-by tuple
 FieldType = Union[str, FirestoreField]
-# Alias de tipo para la tupla
+# Alias for field ordering tuples
 FieldOrderType = Tuple[FieldType, OrderByDirection]
-
 
 logger = logging.getLogger(__name__)
 
 class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
     """
-    ODM base para Firestore con operaciones asíncronas.
+    Base ODM for Firestore with asynchronous operations.
     """
 
     # --------------------------------------------------------------------------
-    # Campo por defecto (ID del documento)
+    # Default field (document ID)
     # --------------------------------------------------------------------------
     id: Optional[str] = Field(default=None)
 
     # --------------------------------------------------------------------------
-    # Atributo de clase para el FirestoreDB que se usará
+    # Class attribute for injected FirestoreDB instance
     # --------------------------------------------------------------------------
-    _db: Optional["FirestoreDB"] = None  # Se inyecta externamente
+    _db: Optional["FirestoreDB"] = None  # Injected externally
 
     # --------------------------------------------------------------------------
-    # Definición de la colección
+    # Collection definition
     # --------------------------------------------------------------------------
     class Settings:
-        name: str = "BaseCollection"  # Sobrescribir en subclases
+        name: str = "BaseCollection"  # Override in subclasses
 
     # --------------------------------------------------------------------------
-    # Config de Pydantic
+    # Pydantic configuration
     # --------------------------------------------------------------------------
     class Config:
         allow_population_by_field_name = True
         allow_population_by_alias = True
 
     # --------------------------------------------------------------------------
-    # Métodos de inicialización del DB (inyección)
+    # Database initialization methods (injection)
     # --------------------------------------------------------------------------
     @classmethod
     def initialize_db(cls, db: "FirestoreDB"):
         """
-        Inyecta el objeto FirestoreDB que se usará para todas las operaciones.
+        Inject the FirestoreDB instance to be used for all operations.
         """
         cls._db = db
 
     @property
     def collection_name(self) -> str:
         """
-        Retorna el nombre de la colección de este modelo.
+        Return the Firestore collection name for this model.
         """
         if hasattr(self, "Settings") and hasattr(self.Settings, "name"):
             return self.Settings.name
@@ -65,24 +63,29 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
     @classmethod
     def get_collection_name(cls) -> str:
         """
-        Versión de clase para obtener el nombre de la colección.
+        Class-level method to get the collection name.
         """
         if hasattr(cls, "Settings") and hasattr(cls.Settings, "name"):
             return cls.Settings.name
         return cls.__name__
 
     # --------------------------------------------------------------------------
-    # CRUD Asíncrono (create/update/delete)
+    # CRUD operations: create/update/delete
     # --------------------------------------------------------------------------
-    async def save(self,exclude_none=True,by_alias=True,exclude_unset=True) -> "BaseFirestoreModel":
+    async def save(self, exclude_none=True, by_alias=True, exclude_unset=True) -> "BaseFirestoreModel":
         """
-        Crea o sobrescribe el documento en Firestore de manera asíncrona.
+        Create the document in Firestore asynchronously.
         """
         if not self._db:
-            raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
+            raise RuntimeError("Database must be initialized before using the model.")
         db_client = self._db.client
 
-        data_to_save = self.dict(exclude={"id"}, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
+        data_to_save = self.dict(
+            exclude={"id"},
+            exclude_unset=exclude_unset,
+            exclude_none=exclude_none,
+            by_alias=by_alias,
+        )
         collection_ref = db_client.collection(self.collection_name)
 
         if not self.id:
@@ -90,27 +93,46 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
             self.id = doc_ref.id
         else:
             doc_ref = collection_ref.document(self.id)
+            if (await doc_ref.get()).exists:
+                raise RuntimeError("Error creating object: provided ID already exists.")
 
         await doc_ref.set(data_to_save)
         return self
 
-    async def update(self, include: Optional[set] = None,exclude_none=True,by_alias=True,exclude_unset=True) -> "BaseFirestoreModel":
+    async def update(
+        self,
+        include: Optional[set] = None,
+        exclude_none=True,
+        by_alias=True,
+        exclude_unset=True,
+    ) -> "BaseFirestoreModel":
         """
-        Actualiza campos en un documento existente en Firestore.
+        Update fields on an existing Firestore document.
         """
         if not self._db:
-            raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
+            raise RuntimeError("Database must be initialized before using the model.")
         db_client = self._db.client
 
         if not self.id:
-            raise ValueError("No se puede actualizar un documento sin un ID.")
+            raise ValueError("Cannot update a document without an ID.")
 
         doc_ref = db_client.collection(self.collection_name).document(self.id)
 
         if include:
-            updates = self.dict(exclude={"id"}, include=include, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
+            updates = self.dict(
+                exclude={"id"},
+                include=include,
+                exclude_unset=exclude_unset,
+                exclude_none=exclude_none,
+                by_alias=by_alias,
+            )
         else:
-            updates = self.dict(exclude={"id"}, exclude_unset=exclude_unset, exclude_none=exclude_none,by_alias=by_alias)
+            updates = self.dict(
+                exclude={"id"},
+                exclude_unset=exclude_unset,
+                exclude_none=exclude_none,
+                by_alias=by_alias,
+            )
 
         logger.debug(f"Update: {self.collection_name} - id={self.id}, updates={updates}")
         if updates:
@@ -119,28 +141,28 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
 
     async def delete(self) -> None:
         """
-        Elimina el documento en Firestore.
+        Delete the document from Firestore.
         """
         if not self._db:
-            raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
+            raise RuntimeError("Database must be initialized before using the model.")
         db_client = self._db.client
 
         if not self.id:
-            raise ValueError("No se puede eliminar un documento sin un ID.")
+            raise ValueError("Cannot delete a document without an ID.")
 
         doc_ref = db_client.collection(self.collection_name).document(self.id)
         await doc_ref.delete()
 
     # --------------------------------------------------------------------------
-    # Obtener un doc por ID
+    # Get a document by ID
     # --------------------------------------------------------------------------
     @classmethod
     async def get(cls, doc_id: str) -> Optional["BaseFirestoreModel"]:
         """
-        Obtiene un documento por su ID.
+        Retrieve a document by its ID.
         """
         if not cls._db:
-            raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
+            raise RuntimeError("Database must be initialized before using the model.")
         db_client = cls._db.client
 
         doc_ref = db_client.collection(cls.get_collection_name()).document(doc_id)
@@ -153,94 +175,93 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         return None
 
     # --------------------------------------------------------------------------
-    # Contar documentos
+    # Check if a document exists by ID
+    # --------------------------------------------------------------------------
+    @classmethod
+    async def exists(cls, doc_id: str) -> bool:
+        """
+        Return True if a document with the given ID exists in Firestore.
+        """
+        if not cls._db:
+            raise RuntimeError("Database must be initialized before using the model.")
+        db_client = cls._db.client
+
+        doc_ref = db_client.collection(cls.get_collection_name()).document(doc_id)
+        doc_snap = await doc_ref.get()
+        return doc_snap.exists
+
+    # --------------------------------------------------------------------------
+    # Count documents
     # --------------------------------------------------------------------------
     @classmethod
     async def count(cls, filters: List[Tuple[str, str, Any]]) -> int:
         """
-        Retorna el número de documentos que cumplen los filtros.
-        Si tu SDK no soporta .count(), puedes hacer un approach manual.
+        Return the number of documents matching the given filters.
+        If the SDK does not support .count(), a manual approach is used.
         """
         if not cls._db:
-            raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
+            raise RuntimeError("Database must be initialized before using the model.")
         db_client = cls._db.client
 
         query = cls._build_query(db_client, filters=filters)
         try:
-            # Firestore 2.11+ en adelante
             count_snapshot = await query.count().get()
-            # Devuelve una lista de agregaciones; la primera es count
             return count_snapshot[0][0].value
         except AttributeError:
-            logger.warning("Firestore: Performing count downloading all items with empty select")
-            # Si tu librería no soporta count(), fallback manual
+            logger.warning("Firestore: Performing count by fetching all items with empty select")
             docs = await query.select([]).get()
             return len(docs)
 
     # --------------------------------------------------------------------------
-    # Find (generador asíncrono)
+    # Find (asynchronous generator)
     # --------------------------------------------------------------------------
-    
     @classmethod
     async def find(
         cls,
         filters: List[Tuple[FieldType, FirestoreOperators, Any]] = None,
         projection: Optional[Type[BaseModel]] = None,
-        order_by: Optional[Union[List[Union[FieldType, FieldOrderType]],Union[FieldType, FieldOrderType]]] = None,
+        order_by: Optional[
+            Union[List[Union[FieldType, FieldOrderType]], Union[FieldType, FieldOrderType]]
+        ] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
-    ) -> AsyncGenerator[Union["BaseFirestoreModel",Type[BaseModel]], None]:
+    ) -> AsyncGenerator[Union["BaseFirestoreModel", Type[BaseModel]], None]:
         """
-        Busca documentos que cumplan los filtros y los retorna como generador asíncrono.
-
-        :param filters: Lista de tuplas (campo, operador, valor).
-        :param projection: Clase Pydantic para proyectar campos (ej. PartialModel).
-                           Si es None, se traen todos los campos.
-        :param order_by: Campo para ordenar (puede ser FirestoreField o string).
-        :param limit: Máximo de documentos a retornar.
-        :param offset: Desplazamiento (para paginación).
-        :return: AsyncGenerator que produce instancias de `cls`.
+        Asynchronously search for documents matching filters and yield instances.
         """
         if not cls._db:
-            raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
+            raise RuntimeError("Database must be initialized before using the model.")
         db_client = cls._db.client
 
         filters = filters or []
         query = cls._build_query(db_client, filters=filters, projection=projection)
 
-        # Ordenación
-        if order_by :
-            if type(order_by) != list:
-                order_by= [order_by]
+        # Ordering
+        if order_by:
+            if not isinstance(order_by, list):
+                order_by = [order_by]
             for order_by_field in order_by:
-                order_by_kwargs = {}
-
-                if type(order_by_field) == tuple:
-                    field,direction=order_by_field
-                    order_by_kwargs={"direction":str(direction)}
+                if isinstance(order_by_field, tuple):
+                    field, direction = order_by_field
+                    query = query.order_by(str(field), direction=str(direction))
                 else:
-                    field = order_by_field
-                # Si es un FirestoreField, lo convertimos a string.
-                if isinstance(field, FirestoreField):
-                    field = str(field)
-                query = query.order_by(field,**order_by_kwargs)
+                    query = query.order_by(str(order_by_field))
 
-        # Paginación
+        # Pagination
         if offset is not None:
             query = query.offset(offset)
         if limit is not None:
             query = query.limit(limit)
 
-        # Firestore asíncrono permite stream()
         docs = query.stream()
-        constructor  = cls if projection is None else projection
+        constructor = cls if projection is None else projection
         async for doc in docs:
             data = doc.to_dict()
             data["id"] = doc.id
             yield constructor(**data)
 
     # --------------------------------------------------------------------------
-    # Find one (retorna el primer documento que cumpla filtros)
+    # Find one (first matching document)
     # --------------------------------------------------------------------------
     @classmethod
     async def find_one(
@@ -250,44 +271,37 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         order_by: Optional[Union[FieldType, FieldOrderType]] = None,
     ) -> Optional["BaseFirestoreModel"]:
         """
-        Retorna un único documento que cumpla los filtros (o None si no hay).
-        Soporta proyección y ordenación.
+        Return the first document matching filters, or None if no match.
         """
         async for obj in cls.find(
-            filters=filters,
-            projection=projection,
-            order_by=order_by,
-            limit=1
+            filters=filters, projection=projection, order_by=order_by, limit=1
         ):
             return obj
         return None
 
     # --------------------------------------------------------------------------
-    # Build query interno
+    # Internal query builder
     # --------------------------------------------------------------------------
     @classmethod
-    def _build_query(cls, db_client: AsyncClient , filters: List[Tuple[str, str, Any]], projection: Optional[Type[BaseModel]] = None):
+    def _build_query(
+        cls, db_client: AsyncClient, filters: List[Tuple[str, str, Any]], projection: Optional[Type[BaseModel]] = None
+    ):
         """
-        Construye la query de Firestore aplicando filtros y proyección.
+        Build a Firestore query applying filters and optional projection.
         """
         collection_ref = db_client.collection(cls.get_collection_name())
         query = collection_ref
 
-        # Aplicar los filtros
+        # Apply filters
         for (field_name, op, value) in filters:
-            # query = query.where(field_name, op, value)
-            # query = query.filter((field_name, op, value))
-            # query = query.where(field_name=field_name, op_string=op, value=value)
             query = query.where(field_path=field_name, op_string=op, value=value)
-            
 
-        # Proyección
-        # Si se proporciona un modelo Pydantic para projection, tomamos sus campos
-        if projection is not None:
+        # Projection
+        if projection:
             if hasattr(projection, "model_fields"):
-                select_fields = list(projection.model_fields.keys())  # Pydantic v2
+                select_fields = list(projection.model_fields.keys())
             else:
-                select_fields = list(projection.schema()["properties"].keys())  # Pydantic v1
+                select_fields = list(projection.schema()["properties"].keys())
             logger.debug(f"Build Query: select fields: {select_fields}")
             query = query.select(select_fields)
 
@@ -299,10 +313,10 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
     @classmethod
     async def batch_write(cls, operations: List[Tuple["BatchOperation", "BaseFirestoreModel"]]):
         """
-        Ejecuta operaciones en batch (create, update, delete) de forma atómica.
+        Execute atomic batch operations (create, update, delete).
         """
         if not cls._db:
-            raise RuntimeError("Debe inicializar el DB antes de usar el modelo.")
+            raise RuntimeError("Database must be initialized before using the model.")
         db_client = cls._db.client
 
         batch = db_client.batch()
@@ -310,11 +324,14 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
         for op, model_instance in operations:
             collection_ref = db_client.collection(model_instance.collection_name)
 
-            # Determinar el doc_ref
             if not model_instance.id and op != BatchOperation.CREATE:
-                raise ValueError(f"No se puede {op} sin ID asignado en {model_instance}.")
+                raise ValueError(f"Cannot {op} without an ID assigned on {model_instance}.")
 
-            doc_ref = collection_ref.document(model_instance.id) if model_instance.id else collection_ref.document()
+            doc_ref = (
+                collection_ref.document(model_instance.id)
+                if model_instance.id
+                else collection_ref.document()
+            )
 
             if op == BatchOperation.CREATE:
                 if not model_instance.id:

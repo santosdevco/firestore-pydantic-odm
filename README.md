@@ -1,191 +1,144 @@
 
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/santosdevco/firestore-pydantic-odm/publish.yml)](https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/publish.yml)
+[![PyPI](https://img.shields.io/pypi/v/firestore-pydantic-odm)](https://pypi.org/project/firestore-pydantic-odm/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/firestore-pydantic-odm)](https://pypi.org/project/firestore-pydantic-odm/)
+[![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
 # Firestore Pydantic ODM
 
-**Firestore Pydantic ODM** es una librería para interactuar con Google Cloud Firestore de forma sencilla y eficiente. Utiliza [Pydantic](https://pydantic-docs.helpmanual.io/) para la validación y serialización de datos y ofrece soporte para operaciones asíncronas, batch writes, transacciones, paginación, proyecciones y más.
+**Firestore Pydantic ODM** is a lightweight, fully-typed Object-Document Mapper for **Google Cloud Firestore**.  
+It combines [Pydantic]’s data-validation super-powers with Firestore’s scalable NoSQL store, offering async CRUD, batch writes, transactions, and **projections that request only the fields you need**—making queries faster and cheaper.
 
-Esta librería está diseñada para facilitar el desarrollo de aplicaciones que requieren almacenar y consultar datos en Firestore, ofreciendo una interfaz Pythonic y desacoplada que permite cambiar fácilmente el cliente (por ejemplo, para usar emuladores o mocks en testing).
+---
 
-## Características
+## Features
 
-- **CRUD Asíncrono:** Soporte completo para crear, leer, actualizar y eliminar documentos de Firestore usando `async/await`.
-- **Validación con Pydantic:** Define tus modelos de datos con validación automática, asegurando la integridad de la información.
-- **Consultas Avanzadas:** Realiza búsquedas con filtros, proyecciones (seleccionar solo ciertos campos) y ordenación.
-- **Batch Operations y Transacciones:** Agrupa múltiples operaciones de escritura y ejecuta transacciones de forma atómica para mayor eficiencia y coherencia.
-- **Soporte para Emulador y Testing:** Configura de forma sencilla el uso del emulador de Firestore o integra mocks para pruebas unitarias.
-- **Fácil Integración:** Se integra sin problemas en cualquier proyecto Python.
+* **Asynchronous CRUD:** Full support for creating, reading, updating, and deleting Firestore documents using `async/await`.
+* **Validation with Pydantic:** Define your data models with automatic validation, ensuring data integrity before it reaches the database.
+* **Advanced Queries:** Perform searches with filters, projections (selecting only specific fields), and ordering.
+* **Batch Operations and Transactions:** Group multiple write operations and execute transactions atomically for greater efficiency and consistency.
+* **Emulator and Testing Support:** Easily switch to the Firestore emulator or plug in mocks for unit testing.
+* **Seamless Integration:** Fits smoothly into any Python project with minimal setup.
 
-## Instalación
+---
 
-### Desde el Código Fuente
+## Installation
 
-1. Clona el repositorio:
-   ```bash
-   git clone https://github.com/santosdevco/firestore-pydantic-odm
-   cd firestore_pydantic_odm
-   ```
-
-2. Instala las dependencias y el paquete en modo editable:
-   ```bash
-   pip install -e .
-   ```
-
-### Dependencias
-
-Revisa el archivo [requirements.txt](requirements.txt) para conocer las dependencias necesarias, entre las que se incluyen:
-- `pydantic`
-- `google-cloud-firestore>=2.0.0`
-- `pytest` y `pytest-asyncio` (para testing)
-
-## Estructura del Proyecto
-
-La organización recomendada es la siguiente:
-
-```
-firestore_pydantic_odm/
-    __init__.py         # Exposición de la API pública
-    firestore_model.py  # Lógica principal del ODM
-    firestore_fields.py # Descriptores y manejo de filtros
-    enums.py            # Enumeraciones (e.g., BatchOperation)
-    firestore_client.py # Inicialización y gestión del cliente Firestore
-tests/
-    conftest.py         # Fixtures para pruebas
-    tests.py            # Pruebas unitarias
-Dockerfile              # Configuración Docker
-docker-compose.yaml     # Configuración Docker Compose
-requirements.txt        # Dependencias del proyecto
-pytest.ini              # Configuración global de Pytest
-setup.py                # Script de instalación del paquete
+```bash
+pip install firestore-pydantic-odm
 ```
 
-> **Nota:** El archivo `__init__.py` es fundamental para que Python reconozca el directorio `firestore_pydantic_odm` como un paquete. En él se exportan las clases y funciones principales de la librería.
+---
 
-## Uso Básico
+## Quick Start
 
-### Definir un Modelo
-
-Crea tus modelos extendiendo la clase base `BaseFirestoreModel`:
+### 1 · Define a model
 
 ```python
 from firestore_pydantic_odm import BaseFirestoreModel
 
 class User(BaseFirestoreModel):
     class Settings:
-        name = "users"  # Nombre de la colección en Firestore
+        name = "users"      # Firestore collection name
 
     name: str
     email: str
 ```
 
-### Inicializar el Cliente de Firestore
-
-Antes de utilizar los modelos, inicializa la conexión:
+### 2 · Initialise Firestore
 
 ```python
 from firestore_pydantic_odm import FirestoreDB, BaseFirestoreModel
 
-# Inicializa el cliente, pudiendo especificar el host del emulador si es necesario
-db = FirestoreDB(project_id="tu-proyecto", emulator_host="localhost:8080")
-
-# Inyecta el cliente en la clase base para que todos los modelos lo utilicen
+db = FirestoreDB(project_id="my-project", emulator_host="localhost:8080")  # optional emulator
 BaseFirestoreModel.initialize_db(db)
 ```
 
-### Operaciones CRUD
-
-#### Crear y Guardar un Documento
+### 3 · Async CRUD
 
 ```python
 user = User(name="Alice", email="alice@example.com")
-await user.save()
+await user.save()               # CREATE
+
+user.email = "alice@new.com"
+await user.update()             # UPDATE
+
+await user.delete()             # DELETE
 ```
 
-#### Actualizar un Documento
+### 4 · Querying & Projections
 
 ```python
-user.email = "nueva_alice@example.com"
-await user.update()
+# Simple filter
+async for u in User.find(filters=[User.name == "Alice"]):
+    print(u)
+
+# Single document
+u = await User.find_one(filters=[User.email == "alice@new.com"])
 ```
 
-#### Eliminar un Documento
-
-```python
-await user.delete()
-```
-
-#### Obtener un Documento por ID
-
-```python
-user = await User.get("id_del_documento")
-```
-
-### Consultas
-
-#### Buscar Documentos
-
-Realiza búsquedas utilizando filtros:
-
-```python
-async for user in User.find(filters=[User.name == "Alice"]):
-    print(user)
-```
-
-#### Buscar un Único Documento
-
-```python
-user = await User.find_one(filters=[User.email ==  "alice@example.com"])
-```
-
-#### Usar Proyecciones
-
-Si solo necesitas ciertos campos, puedes usar un modelo de proyección:
+#### Projections — selecting only the fields you need
 
 ```python
 from pydantic import BaseModel
 
 class UserProjection(BaseModel):
-    name: str
+    name: str            # only grab the `name` field
 
-async for user in User.find(filters=[User.name ==  "Alice"], projection=UserProjection):
-    print(user)
+async for u in User.find(
+        filters=[User.age >= 18],
+        projection=UserProjection):
+    print(u.name)        # `u` is an instance of UserProjection
+
+# Fetch a single document with a projection
+u = await User.find_one(
+        filters=[User.id == "abc123"],
+        projection=UserProjection)
 ```
 
-### Batch Operations y Transacciones
+> **How it works:** the ODM converts `UserProjection` into a Firestore **field mask**, so the RPC fetches *only* the columns defined in that class.
+> Each item yielded by `find()` (or returned by `find_one()`) is therefore of type **`UserProjection`**, giving you a clean `List[UserProjection]` with exactly the data requested.
 
-#### Operaciones en Batch
+### 5 · Batch writes
 
 ```python
 from firestore_pydantic_odm import BatchOperation
 
 ops = [
     (BatchOperation.CREATE, User(name="Bob", email="bob@example.com")),
-    (BatchOperation.UPDATE, user),
-    (BatchOperation.DELETE, another_user)
+    (BatchOperation.UPDATE, user),            # previously fetched instance
+    (BatchOperation.DELETE, another_user)     # instance with `id` set
 ]
-
 await User.batch_write(ops)
 ```
 
+---
 
 ## Testing
 
-El proyecto incluye pruebas unitarias con [pytest](https://docs.pytest.org/) y [pytest-asyncio](https://github.com/pytest-dev/pytest-asyncio).  
-Para ejecutar los tests, simplemente corre:
+The project ships with `pytest` and `pytest-asyncio` fixtures. To run the suite:
 
 ```bash
 pytest
 ```
 
-El archivo `pytest.ini` y `conftest.py` (ubicado en la raíz o en el directorio `tests/`) proporcionan la configuración y las fixtures necesarias.
+Set `FIRESTORE_EMULATOR_HOST=localhost:8080` to run tests against the local emulator instead of production Firestore.
 
-## Contribuir
+---
 
-¡Contribuciones son bienvenidas! Si deseas aportar mejoras:
+## Contributing
 
-1. Haz un fork del repositorio.
-2. Crea una rama para tu feature o corrección.
-3. Realiza tus cambios y asegúrate de que todos los tests pasen.
-4. Envía un Pull Request describiendo tus mejoras.
+1. Fork the repository
+2. `git checkout -b feature/awesome`
+3. Write code & tests; ensure **all tests pass**
+4. Open a Pull Request describing your improvements
 
-## Licencia
+---
 
-Distribuido bajo la Licencia MIT. Consulta el archivo [LICENSE](LICENSE) para más detalles.
+## License
+
+Distributed under the **BSD 3-Clause License**.
+See the [`LICENSE`](LICENSE) file for full text.
+
+
+
