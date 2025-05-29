@@ -1,8 +1,7 @@
-fastapi==0.70.0
-fastapi-socketio==0.0.9
-uvicorn==0.15.0
-gunicorn
-google-cloud-aiplatform>=1.38
-google-cloud-firestore
-pytest
-pytest_asyncio
+# runtime
+pydantic>=1.10,<3
+google-cloud-firestore>=2.0.0,<3
+
+# development / CI (optional extras)
+pytest>=6.0
+pytest-asyncio>=0.17
