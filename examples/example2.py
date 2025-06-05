@@ -25,8 +25,6 @@ async def main():
     # O sin emulador:
     # db = FirestoreDB(project_id="mi-proyecto")
 
-    # 2. Inyectar en el modelo
-    BaseFirestoreModel.initialize_db(db)
 
     # 3. Definir un modelo concreto
     class User(BaseFirestoreModel):
@@ -40,6 +38,8 @@ async def main():
         # solo quiero el name
         name: str
     
+    # inicializar modelos
+    init_firestore_odm(db,[User])
     # 5. Buscar usuarios
     async for u in User.find(projection=UserProjection,order_by=[(User.name,OrderByDirection.ASCENDING)]): # todos los usuarios ordenados por nombre invertidos
         print(f"{type(u)}: {u}")

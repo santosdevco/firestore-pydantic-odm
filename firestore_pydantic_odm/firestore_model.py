@@ -1,10 +1,12 @@
 import logging
 from typing import List, Tuple, Any, Optional, AsyncGenerator, Type, Union
-from pydantic import BaseModel, Field
+from .pydantic_compat import BaseModel, Field, get_model_fields
 from .enums import BatchOperation, OrderByDirection, FirestoreOperators
 from .firestore_client import FirestoreDB
-from .firestore_fields import FirestoreQueryMetaclass, FirestoreField
+from .firestore_fields import  FirestoreField
 from google.cloud.firestore_v1 import AsyncClient
+from google.cloud.firestore_v1.field_path import FieldPath
+
 
 # Alias for the first element in order-by tuple
 FieldType = Union[str, FirestoreField]
@@ -13,7 +15,7 @@ FieldOrderType = Tuple[FieldType, OrderByDirection]
 
 logger = logging.getLogger(__name__)
 
-class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
+class BaseFirestoreModel(BaseModel ):
     """
     Base ODM for Firestore with asynchronous operations.
     """
@@ -40,7 +42,19 @@ class BaseFirestoreModel(BaseModel, metaclass=FirestoreQueryMetaclass):
     class Config:
         allow_population_by_field_name = True
         allow_population_by_alias = True
+    @classmethod
+    def initialize_fields(cls) -> None:
 
+        # 1) Obtenemos el diccionario de campos según la versión:
+        fields_dict = get_model_fields(cls)
+       
+        for field_name, field_info in fields_dict.items():
+            # field_info.alias funciona en V1 y V2 (pydantic.v1 expone alias)
+            alias = (
+                FieldPath.document_id() if field_name == "id"
+                else (field_info.alias or field_name)  # type: ignore[attr-defined]
+            )
+            setattr(cls, field_name, FirestoreField(alias))
     # --------------------------------------------------------------------------
     # Database initialization methods (injection)
     # --------------------------------------------------------------------------

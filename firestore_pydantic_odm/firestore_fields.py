@@ -1,7 +1,5 @@
 from typing import Any, List
 
-from google.cloud.firestore_v1.field_path import FieldPath
-from pydantic.main import ModelMetaclass
 
 from .enums import FirestoreOperators
 
@@ -95,28 +93,4 @@ class FirestoreField:
         return (self.field_name, FirestoreOperators.ARRAY_CONTAINS_ANY, values)
 
 
-class FirestoreQueryMetaclass(ModelMetaclass):
-    """
-    Custom Pydantic metaclass that injects :class:`FirestoreField`
-    descriptors for every declared model field.
 
-    * The **regular fields** keep their names or Pydantic aliases.:contentReference[oaicite:5]{index=5}  
-    * The special ``id`` attribute is aliased to
-      :pyfunc:`FieldPath.document_id`, enabling filters and sorts on the
-      document ID itself without hard-coding ``__name__`` strings.:contentReference[oaicite:6]{index=6}
-    """
-
-    def __new__(mcs, name, bases, namespace):
-        cls = super().__new__(mcs, name, bases, namespace)
-
-        # Inject a FirestoreField for every Pydantic field so that
-        # `MyModel.some_field == value` produces a filter tuple.
-        for field_name, model_field in getattr(cls, "__fields__", {}).items():
-            alias = (
-                FieldPath.document_id()
-                if field_name == "id"
-                else model_field.alias or field_name
-            )
-            setattr(cls, field_name, FirestoreField(alias))
-
-        return cls

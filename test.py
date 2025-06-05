@@ -24,6 +24,8 @@ async def main():
     # O sin emulador:
     # db = FirestoreDB(project_id="mi-proyecto")
 
+    # 2. Inyectar en el modelo
+    # BaseFirestoreModel.initialize_db(db)
 
     # 3. Definir un modelo concreto
     class User(BaseFirestoreModel):
@@ -32,27 +34,25 @@ async def main():
 
         name: str
         email: str
-    # inicializar modelos
     init_firestore_odm(db,[User])
-
-    # 4. Crear un usuario
-    user = User(name="Alice", email="alice@example.com")
-    await user.save()
-    # 4. Crear un usuario
-    user1 = User(name="Bob", email="bob@example.com")
-    await user1.save()
+    # # 4. Crear un usuario
+    # user = User(name="Alice", email="alice@example.com")
+    # await user.save()
 
     # 5. Buscar usuarios
-    async for u in User.find(order_by=[(User.name,OrderByDirection.ASCENDING)]): # todos los usuarios ordenados por nombre invertidos
+    async for u in User.find():
         print(u)
 
     # 6. Contar usuarios con cierto filtro
-    total = await User.count([User.name == "Alice"])
+    total = await User.count([User.name == "Bob"])
     print("Usuarios llamados Alice:", total)
     # print(str(OrderByDirection.DESCENDING))
+    # await User(name="Bob", email="bob@example.com").save()
     user = await User.find_one([],order_by=[(User.name,OrderByDirection.ASCENDING)])
-    print(f"User in find one: {user} ")
-    user.name = "New Name in Batch Write"
+    print("user")
+    print(user)
+    print("user")
+    print("Usuarios llamados Alice:", total)
     # 7. Batch operation
     from typing import List, Tuple
     ops: List[Tuple[BatchOperation, User]] = [

@@ -40,7 +40,8 @@ async def initialized_model(firestore_db):
     Inyecta el objeto FirestoreDB en BaseFirestoreModel.
     Todos los modelos hijos usarán este cliente.
     """
-    BaseFirestoreModel.initialize_db(firestore_db)
+    init_firestore_odm(firestore_db,[User])
+    
     return User
 
 # -----------------------------------------------------------------------------
