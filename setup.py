@@ -6,7 +6,7 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")  # markdown is more co
 
 setup(
     name="firestore_pydantic_odm",
-    version="0.2.4",
+    version="0.2.6",
     description="Asynchronous Pydantic ODM for Google Cloud Firestore",
     long_description=README,
     long_description_content_type="text/markdown",
