@@ -25,7 +25,7 @@ class FirestoreDB:
     def __init__(
         self,
         project_id: str,
-        database: str | None = None,
+        database: Optional[str]  = None,
         credentials=None,
         emulator_host: Optional[str] = None,
     ):

@@ -312,12 +312,15 @@ class BaseFirestoreModel(BaseModel ):
 
         # Projection
         if projection:
+            # Pydantic v2 → los campos están en projection.model_fields
             if hasattr(projection, "model_fields"):
-                select_fields = list(projection.model_fields.keys())
+                select_fields = [model_field.alias or name for name, model_field in projection.model_fields.items()]
+
+            # Pydantic v1 → los campos están en projection.__fields__
             else:
-                select_fields = list(projection.schema()["properties"].keys())
-            logger.debug(f"Build Query: select fields: {select_fields}")
+                select_fields = [model_field.alias or name for name, model_field in projection.__fields__.items()]
             query = query.select(select_fields)
+    
 
         return query
 
@@ -350,11 +353,11 @@ class BaseFirestoreModel(BaseModel ):
             if op == BatchOperation.CREATE:
                 if not model_instance.id:
                     model_instance.id = doc_ref.id
-                data_to_save = model_instance.dict(exclude={"id"}, exclude_none=True)
+                data_to_save = model_instance.dict(exclude={"id"}, by_alias=True, exclude_none=True)
                 batch.set(doc_ref, data_to_save)
 
             elif op == BatchOperation.UPDATE:
-                data_to_update = model_instance.dict(exclude={"id"}, exclude_none=True)
+                data_to_update = model_instance.dict(exclude={"id"},  by_alias=True,exclude_none=True)
                 batch.update(doc_ref, data_to_update)
 
             elif op == BatchOperation.DELETE:
