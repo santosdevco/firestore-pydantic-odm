@@ -9,6 +9,8 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+# Auto-generated from README.md at build time
+README.rst
 develop-eggs/
 dist/
 downloads/

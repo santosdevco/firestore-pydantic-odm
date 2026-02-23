@@ -2,14 +2,22 @@ from pathlib import Path
 from setuptools import setup, find_packages
 
 ROOT = Path(__file__).parent
-README = (ROOT / "README.md").read_text(encoding="utf-8")  # markdown is more common
+
+try:
+    import pypandoc
+    README = pypandoc.convert_file(str(ROOT / "README.md"), "rst")
+    (ROOT / "README.rst").write_text(README, encoding="utf-8")
+    long_description_content_type = "text/x-rst"
+except (ImportError, OSError):
+    README = (ROOT / "README.md").read_text(encoding="utf-8")
+    long_description_content_type = "text/markdown"
 
 setup(
     name="firestore_pydantic_odm",
     version="0.2.7",
     description="Asynchronous Pydantic ODM for Google Cloud Firestore",
     long_description=README,
-    long_description_content_type="text/markdown",
+    long_description_content_type=long_description_content_type,
     author="Santos Dev Co",
     author_email="projects@santosdevco.com",
     url="https://github.com/santosdevco/firestore-pydantic-odm",
