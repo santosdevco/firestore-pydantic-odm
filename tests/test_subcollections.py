@@ -53,7 +53,11 @@ def mock_firestore_client():
 
 @pytest.fixture
 def firestore_db(mock_firestore_client):
-    db = FirestoreDB(project_id="test-project")
+    db = FirestoreDB.__new__(FirestoreDB)
+    db.project_id = "test-project"
+    db.database = None
+    db.credentials = None
+    db._emulator_host = None
     db.client = mock_firestore_client
     return db
 
