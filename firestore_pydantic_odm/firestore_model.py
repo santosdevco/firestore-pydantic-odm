@@ -38,6 +38,8 @@ class BaseFirestoreModel(BaseModel ):
     # Class attribute for injected FirestoreDB instance
     # --------------------------------------------------------------------------
     _db: Optional["FirestoreDB"] = None  # Injected externally
+    _parent_path: Optional[str] = None  # Stores parent doc path for subcollections
+    _registered_models: list = []  # Populated by init_firestore_odm
 
     # --------------------------------------------------------------------------
     # Collection definition
@@ -96,9 +98,128 @@ class BaseFirestoreModel(BaseModel ):
         return cls.__name__
 
     # --------------------------------------------------------------------------
+    # Path resolution for subcollections
+    # --------------------------------------------------------------------------
+    def _get_doc_path(self) -> str:
+        """
+        Return the full Firestore document path for this instance.
+        E.g. 'users/uid_123' or 'users/uid_123/posts/pid_456'
+        """
+        if not self.id:
+            raise ValueError("Cannot get document path without an ID.")
+
+        collection_path = self._get_collection_path()
+        return f"{collection_path}/{self.id}"
+
+    def _get_collection_path(self, parent: Optional["BaseFirestoreModel"] = None) -> str:
+        """
+        Resolve the full collection path, considering parent hierarchy.
+        """
+        has_parent_setting = (
+            hasattr(self, "Settings")
+            and hasattr(self.Settings, "parent")
+            and getattr(self.Settings, "parent", None) is not None
+        )
+
+        if has_parent_setting:
+            if parent is not None:
+                parent_doc_path = parent._get_doc_path()
+            elif self._parent_path is not None:
+                parent_doc_path = self._parent_path
+            else:
+                raise RuntimeError(
+                    f"{self.__class__.__name__} has Settings.parent = "
+                    f"{self.Settings.parent.__name__}, but no parent instance "
+                    f"was provided and no _parent_path is stored."
+                )
+            return f"{parent_doc_path}/{self.get_collection_name()}"
+        else:
+            return self.get_collection_name()
+
+    @classmethod
+    def _resolve_collection_ref(
+        cls,
+        db_client: "AsyncClient",
+        parent: Optional["BaseFirestoreModel"] = None,
+        parent_path: Optional[str] = None,
+    ):
+        """
+        Resolve the Firestore collection reference.
+
+        For top-level models -> db.collection("users")
+        For subcollection models -> db.collection("users/uid/posts")
+
+        Returns (collection_ref, resolved_parent_path).
+        """
+        has_parent_setting = (
+            hasattr(cls, "Settings")
+            and hasattr(cls.Settings, "parent")
+            and getattr(cls.Settings, "parent", None) is not None
+        )
+
+        if has_parent_setting:
+            if parent is not None:
+                parent_doc_path = parent._get_doc_path()
+            elif parent_path is not None:
+                parent_doc_path = parent_path
+            else:
+                raise RuntimeError(
+                    f"{cls.__name__} requires a parent ({cls.Settings.parent.__name__}) "
+                    f"but none was provided."
+                )
+            full_path = f"{parent_doc_path}/{cls.get_collection_name()}"
+            return db_client.collection(full_path), parent_doc_path
+        else:
+            return db_client.collection(cls.get_collection_name()), None
+
+    @classmethod
+    def _get_child_models(cls) -> list:
+        """
+        Return all registered model classes that declare this class as parent.
+        """
+        return [
+            model for model in cls._registered_models
+            if (
+                hasattr(model, "Settings")
+                and hasattr(model.Settings, "parent")
+                and getattr(model.Settings, "parent", None) is cls
+            )
+        ]
+
+    async def _cascade_delete(self, db_client: "AsyncClient") -> None:
+        """
+        Recursively delete all subcollection documents under this document.
+        """
+        child_models = self._get_child_models()
+        doc_path = self._get_doc_path()
+
+        for child_cls in child_models:
+            child_collection_path = f"{doc_path}/{child_cls.get_collection_name()}"
+            child_ref = db_client.collection(child_collection_path)
+
+            async for child_doc in child_ref.stream():
+                child_instance = child_cls(**child_doc.to_dict(), id=child_doc.id)
+                child_instance._parent_path = doc_path
+                # Recurse into grandchildren
+                await child_instance._cascade_delete(db_client)
+                await child_ref.document(child_doc.id).delete()
+
+    def subcollection(self, child_cls: Type["BaseFirestoreModel"]):
+        """
+        Convenience accessor for subcollection queries.
+        Returns a SubCollectionAccessor bound to this parent instance.
+
+        Usage:
+            async for post in user.subcollection(Post).find():
+                print(post.title)
+        """
+        from .subcollection_accessor import SubCollectionAccessor
+        return SubCollectionAccessor(parent=self, child_cls=child_cls)
+
+    # --------------------------------------------------------------------------
     # CRUD operations: create/update/delete
     # --------------------------------------------------------------------------
-    async def save(self, exclude_none=True, by_alias=True, exclude_unset=True) -> "BaseFirestoreModel":
+    async def save(self, parent: Optional["BaseFirestoreModel"] = None, exclude_none=True, by_alias=True, exclude_unset=True) -> "BaseFirestoreModel":
         """
         Create the document in Firestore asynchronously.
         """
@@ -113,7 +234,11 @@ class BaseFirestoreModel(BaseModel ):
             exclude_none=exclude_none,
             by_alias=by_alias,
         )
-        collection_ref = db_client.collection(self.collection_name)
+        collection_ref, resolved_parent_path = self._resolve_collection_ref(
+            db_client, parent=parent, parent_path=self._parent_path
+        )
+        if resolved_parent_path is not None:
+            self._parent_path = resolved_parent_path
 
         if not self.id:
             doc_ref = collection_ref.document()
@@ -128,6 +253,7 @@ class BaseFirestoreModel(BaseModel ):
 
     async def update(
         self,
+        parent: Optional["BaseFirestoreModel"] = None,
         include: Optional[set] = None,
         exclude_none=True,
         by_alias=True,
@@ -143,7 +269,10 @@ class BaseFirestoreModel(BaseModel ):
         if not self.id:
             raise ValueError("Cannot update a document without an ID.")
 
-        doc_ref = db_client.collection(self.collection_name).document(self.id)
+        collection_ref, _ = self._resolve_collection_ref(
+            db_client, parent=parent, parent_path=self._parent_path
+        )
+        doc_ref = collection_ref.document(self.id)
 
         if include:
             updates = model_dump_compat(
@@ -168,9 +297,10 @@ class BaseFirestoreModel(BaseModel ):
             await doc_ref.update(updates)
         return self
 
-    async def delete(self) -> None:
+    async def delete(self, cascade: bool = False) -> None:
         """
         Delete the document from Firestore.
+        If cascade=True, recursively deletes all subcollection documents first.
         """
         if not self._db:
             raise RuntimeError("Database must be initialized before using the model.")
@@ -179,14 +309,25 @@ class BaseFirestoreModel(BaseModel ):
         if not self.id:
             raise ValueError("Cannot delete a document without an ID.")
 
-        doc_ref = db_client.collection(self.collection_name).document(self.id)
+        collection_ref, _ = self._resolve_collection_ref(
+            db_client, parent_path=self._parent_path
+        )
+        doc_ref = collection_ref.document(self.id)
+
+        if cascade:
+            await self._cascade_delete(db_client)
+
         await doc_ref.delete()
 
     # --------------------------------------------------------------------------
     # Get a document by ID
     # --------------------------------------------------------------------------
     @classmethod
-    async def get(cls, doc_id: str) -> Optional["BaseFirestoreModel"]:
+    async def get(
+        cls,
+        doc_id: str,
+        parent: Optional["BaseFirestoreModel"] = None,
+    ) -> Optional["BaseFirestoreModel"]:
         """
         Retrieve a document by its ID.
         """
@@ -194,20 +335,29 @@ class BaseFirestoreModel(BaseModel ):
             raise RuntimeError("Database must be initialized before using the model.")
         db_client = cls._db.client
 
-        doc_ref = db_client.collection(cls.get_collection_name()).document(doc_id)
+        collection_ref, resolved_parent_path = cls._resolve_collection_ref(
+            db_client, parent=parent
+        )
+        doc_ref = collection_ref.document(doc_id)
         doc_snap = await doc_ref.get()
 
         if doc_snap.exists:
             data = doc_snap.to_dict()
             data["id"] = doc_snap.id
-            return cls(**data)
+            instance = cls(**data)
+            instance._parent_path = resolved_parent_path
+            return instance
         return None
 
     # --------------------------------------------------------------------------
     # Check if a document exists by ID
     # --------------------------------------------------------------------------
     @classmethod
-    async def exists(cls, doc_id: str) -> bool:
+    async def exists(
+        cls,
+        doc_id: str,
+        parent: Optional["BaseFirestoreModel"] = None,
+    ) -> bool:
         """
         Return True if a document with the given ID exists in Firestore.
         """
@@ -215,7 +365,8 @@ class BaseFirestoreModel(BaseModel ):
             raise RuntimeError("Database must be initialized before using the model.")
         db_client = cls._db.client
 
-        doc_ref = db_client.collection(cls.get_collection_name()).document(doc_id)
+        collection_ref, _ = cls._resolve_collection_ref(db_client, parent=parent)
+        doc_ref = collection_ref.document(doc_id)
         doc_snap = await doc_ref.get()
         return doc_snap.exists
 
@@ -223,7 +374,11 @@ class BaseFirestoreModel(BaseModel ):
     # Count documents
     # --------------------------------------------------------------------------
     @classmethod
-    async def count(cls, filters: List[Tuple[str, str, Any]]) -> int:
+    async def count(
+        cls,
+        filters: List[Tuple[str, str, Any]],
+        parent: Optional["BaseFirestoreModel"] = None,
+    ) -> int:
         """
         Return the number of documents matching the given filters.
         If the SDK does not support .count(), a manual approach is used.
@@ -232,7 +387,7 @@ class BaseFirestoreModel(BaseModel ):
             raise RuntimeError("Database must be initialized before using the model.")
         db_client = cls._db.client
 
-        query = cls._build_query(db_client, filters=filters)
+        query, _ = cls._build_query(db_client, filters=filters, parent=parent)
         try:
             count_snapshot = await query.count().get()
             return count_snapshot[0][0].value
@@ -248,6 +403,7 @@ class BaseFirestoreModel(BaseModel ):
     async def find(
         cls,
         filters: List[Tuple[FieldType, FirestoreOperators, Any]] = None,
+        parent: Optional["BaseFirestoreModel"] = None,
         projection: Optional[Type[BaseModel]] = None,
         order_by: Optional[
             Union[List[Union[FieldType, FieldOrderType]], Union[FieldType, FieldOrderType]]
@@ -263,7 +419,9 @@ class BaseFirestoreModel(BaseModel ):
         db_client = cls._db.client
 
         filters = filters or []
-        query = cls._build_query(db_client, filters=filters, projection=projection)
+        query, resolved_parent_path = cls._build_query(
+            db_client, filters=filters, projection=projection, parent=parent
+        )
 
         # Ordering
         if order_by:
@@ -287,7 +445,10 @@ class BaseFirestoreModel(BaseModel ):
         async for doc in docs:
             data = doc.to_dict()
             data["id"] = doc.id
-            yield constructor(**data)
+            instance = constructor(**data)
+            if hasattr(instance, '_parent_path') and resolved_parent_path:
+                instance._parent_path = resolved_parent_path
+            yield instance
 
     # --------------------------------------------------------------------------
     # Find one (first matching document)
@@ -296,6 +457,7 @@ class BaseFirestoreModel(BaseModel ):
     async def find_one(
         cls,
         filters: List[Tuple[str, str, Any]],
+        parent: Optional["BaseFirestoreModel"] = None,
         projection: Optional[Type[BaseModel]] = None,
         order_by: Optional[Union[FieldType, FieldOrderType]] = None,
     ) -> Optional["BaseFirestoreModel"]:
@@ -303,7 +465,7 @@ class BaseFirestoreModel(BaseModel ):
         Return the first document matching filters, or None if no match.
         """
         async for obj in cls.find(
-            filters=filters, projection=projection, order_by=order_by, limit=1
+            filters=filters, parent=parent, projection=projection, order_by=order_by, limit=1
         ):
             return obj
         return None
@@ -313,12 +475,19 @@ class BaseFirestoreModel(BaseModel ):
     # --------------------------------------------------------------------------
     @classmethod
     def _build_query(
-        cls, db_client: AsyncClient, filters: List[Tuple[str, str, Any]], projection: Optional[Type[BaseModel]] = None
+        cls,
+        db_client: AsyncClient,
+        filters: List[Tuple[str, str, Any]],
+        projection: Optional[Type[BaseModel]] = None,
+        parent: Optional["BaseFirestoreModel"] = None,
     ):
         """
         Build a Firestore query applying filters and optional projection.
+        Returns (query, resolved_parent_path).
         """
-        collection_ref = db_client.collection(cls.get_collection_name())
+        collection_ref, resolved_parent_path = cls._resolve_collection_ref(
+            db_client, parent=parent
+        )
         query = collection_ref
 
         # Apply filters
@@ -337,7 +506,67 @@ class BaseFirestoreModel(BaseModel ):
             query = query.select(select_fields)
     
 
-        return query
+        return query, resolved_parent_path
+
+    # --------------------------------------------------------------------------
+    # Collection group queries (cross-parent)
+    # --------------------------------------------------------------------------
+    @classmethod
+    async def collection_group_find(
+        cls,
+        filters: List[Tuple[FieldType, FirestoreOperators, Any]] = None,
+        projection: Optional[Type[BaseModel]] = None,
+        order_by: Optional[
+            Union[List[Union[FieldType, FieldOrderType]], Union[FieldType, FieldOrderType]]
+        ] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> AsyncGenerator[Union["BaseFirestoreModel", Type[BaseModel]], None]:
+        """
+        Query across ALL subcollections with this name, regardless of parent.
+        Uses Firestore's collection_group() API.
+
+        Example: Post.collection_group_find([Post.published == True])
+        -> returns posts from ALL users
+        """
+        if not cls._db:
+            raise RuntimeError("Database must be initialized before using the model.")
+        db_client = cls._db.client
+
+        filters = filters or []
+        query = db_client.collection_group(cls.get_collection_name())
+
+        for (field_name, op, value) in filters:
+            query = query.where(filter=FieldFilter(field_name, op, value))
+
+        # Ordering
+        if order_by:
+            if not isinstance(order_by, list):
+                order_by = [order_by]
+            for order_by_field in order_by:
+                if isinstance(order_by_field, tuple):
+                    field, direction = order_by_field
+                    query = query.order_by(str(field), direction=str(direction))
+                else:
+                    query = query.order_by(str(order_by_field))
+
+        if offset is not None:
+            query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+
+        constructor = cls if projection is None else projection
+        async for doc in query.stream():
+            data = doc.to_dict()
+            data["id"] = doc.id
+            instance = constructor(**data)
+            # Extract parent path from the document reference
+            if hasattr(instance, '_parent_path'):
+                ref_path = doc.reference.path  # e.g. "users/uid/posts/pid"
+                parts = ref_path.rsplit("/", 2)  # ["users/uid", "posts", "pid"]
+                if len(parts) >= 3:
+                    instance._parent_path = parts[0]
+            yield instance
 
     # --------------------------------------------------------------------------
     # Batch operations
@@ -354,7 +583,9 @@ class BaseFirestoreModel(BaseModel ):
         batch = db_client.batch()
 
         for op, model_instance in operations:
-            collection_ref = db_client.collection(model_instance.collection_name)
+            collection_ref, resolved_parent_path = model_instance._resolve_collection_ref(
+                db_client, parent_path=model_instance._parent_path
+            )
 
             if not model_instance.id and op != BatchOperation.CREATE:
                 raise ValueError(f"Cannot {op} without an ID assigned on {model_instance}.")

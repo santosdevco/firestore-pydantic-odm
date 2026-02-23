@@ -66,6 +66,40 @@ await user.update()             # UPDATE
 await user.delete()             # DELETE
 ```
 
+### 3.1 · Subcollections
+
+Declare parent relationships on the **child** model using `Settings.parent`.
+
+```python
+class Post(BaseFirestoreModel):
+    class Settings:
+        name = "posts"
+        parent = User  # Post lives under a User
+
+    title: str
+    body: str
+```
+
+Create and query subcollection documents by passing `parent=`:
+
+```python
+user = User(name="Alice", email="alice@example.com")
+await user.save()
+
+post = Post(title="Hello", body="World")
+await post.save(parent=user)  # users/{user.id}/posts/{post.id}
+
+async for p in Post.find(parent=user):
+    print(p.title)
+```
+
+You can also use the convenience accessor:
+
+```python
+async for p in user.subcollection(Post).find():
+    print(p.title)
+```
+
 ### 4 · Querying & Projections
 
 ```python
