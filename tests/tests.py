@@ -1,7 +1,7 @@
 import pytest
 import pytest_asyncio
-from unittest.mock import MagicMock, AsyncMock, call
-from typing import Any, Tuple, List, Optional, Union, AsyncGenerator, Type
+from unittest.mock import MagicMock, AsyncMock
+from typing import Any, List, Optional, AsyncGenerator
 
 # Ajusta la ruta según tu estructura real.
 from firestore_pydantic_odm import *
@@ -31,7 +31,11 @@ def firestore_db(mock_firestore_client):
     Crea la instancia de FirestoreDB usando un cliente mock.
     Se sobrescribe el atributo `client` con el mock.
     """
-    db = FirestoreDB(project_id="test-project")
+    db = FirestoreDB.__new__(FirestoreDB)
+    db.project_id = "test-project"
+    db.database = None
+    db.credentials = None
+    db._emulator_host = None
     db.client = mock_firestore_client
     return db
 

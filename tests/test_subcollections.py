@@ -53,7 +53,11 @@ def mock_firestore_client():
 
 @pytest.fixture
 def firestore_db(mock_firestore_client):
-    db = FirestoreDB(project_id="test-project")
+    db = FirestoreDB.__new__(FirestoreDB)
+    db.project_id = "test-project"
+    db.database = None
+    db.credentials = None
+    db._emulator_host = None
     db.client = mock_firestore_client
     return db
 
@@ -75,7 +79,7 @@ def make_post(pid="post_456", title="Hello", body="World", parent_user=None):
     """Helper to build a Post optionally bound to a parent user."""
     p = Post(id=pid, title=title, body=body)
     if parent_user:
-        p._parent_path = f"users/{parent_user.id}"
+        object.__setattr__(p, '_parent_path', f"users/{parent_user.id}")
     return p
 
 
@@ -126,7 +130,7 @@ class TestSubcollectionCRUD:
     async def test_save_with_stored_parent_path(self, initialized_models):
         """Post with _parent_path already set can save without parent arg."""
         post = Post(title="Hello", body="World")
-        post._parent_path = "users/user_123"
+        object.__setattr__(post, '_parent_path', "users/user_123")
 
         doc_ref_mock = MagicMock()
         doc_ref_mock.id = "auto_pid"
