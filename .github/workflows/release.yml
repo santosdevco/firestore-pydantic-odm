@@ -105,8 +105,8 @@ jobs:
 
       - name: Create and push tag
         run: |
-          git tag "v${{ steps.next.outputs.version }}"
-          git push origin "v${{ steps.next.outputs.version }}"
+          git tag -a "v${{ steps.next.outputs.version }}" -m "Release v${{ steps.next.outputs.version }}"
+          git push --follow-tags
 
       - name: Generate release notes
         id: notes
@@ -137,3 +137,10 @@ jobs:
 
             **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.current.outputs.version && format('v{0}', steps.current.outputs.version) || '' }}...v${{ steps.next.outputs.version }}
           generate_release_notes: true
+
+      - name: Trigger publish workflow
+        run: |
+          # Wait a moment for GitHub to register the tag
+          sleep 5
+          # Manually trigger the publish workflow using GitHub CLI
+          gh workflow run publish.yml -r master
