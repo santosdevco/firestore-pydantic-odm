@@ -51,7 +51,7 @@ class User(BaseFirestoreModel):
 from firestore_pydantic_odm import FirestoreDB, BaseFirestoreModel
 
 db = FirestoreDB(project_id="my-project", emulator_host="localhost:8080")  # optional emulator
-BaseFirestoreModel.initialize_db(db)
+BaseFirestoreModel.initialize_db(db,[User]) # IMPORTANT the second parameter is a list with all models to initialize
 ```
 
 ### 3 · Async CRUD
