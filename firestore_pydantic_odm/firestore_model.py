@@ -199,7 +199,7 @@ class BaseFirestoreModel(BaseModel ):
 
             async for child_doc in child_ref.stream():
                 child_instance = child_cls(**child_doc.to_dict(), id=child_doc.id)
-                child_instance._parent_path = doc_path
+                object.__setattr__(child_instance, '_parent_path', doc_path)
                 # Recurse into grandchildren
                 await child_instance._cascade_delete(db_client)
                 await child_ref.document(child_doc.id).delete()
@@ -238,7 +238,7 @@ class BaseFirestoreModel(BaseModel ):
             db_client, parent=parent, parent_path=self._parent_path
         )
         if resolved_parent_path is not None:
-            self._parent_path = resolved_parent_path
+            object.__setattr__(self, '_parent_path', resolved_parent_path)
 
         if not self.id:
             doc_ref = collection_ref.document()
@@ -345,7 +345,7 @@ class BaseFirestoreModel(BaseModel ):
             data = doc_snap.to_dict()
             data["id"] = doc_snap.id
             instance = cls(**data)
-            instance._parent_path = resolved_parent_path
+            object.__setattr__(instance, '_parent_path', resolved_parent_path)
             return instance
         return None
 
@@ -446,8 +446,8 @@ class BaseFirestoreModel(BaseModel ):
             data = doc.to_dict()
             data["id"] = doc.id
             instance = constructor(**data)
-            if hasattr(instance, '_parent_path') and resolved_parent_path:
-                instance._parent_path = resolved_parent_path
+            if resolved_parent_path:
+                object.__setattr__(instance, '_parent_path', resolved_parent_path)
             yield instance
 
     # --------------------------------------------------------------------------
@@ -561,11 +561,10 @@ class BaseFirestoreModel(BaseModel ):
             data["id"] = doc.id
             instance = constructor(**data)
             # Extract parent path from the document reference
-            if hasattr(instance, '_parent_path'):
-                ref_path = doc.reference.path  # e.g. "users/uid/posts/pid"
-                parts = ref_path.rsplit("/", 2)  # ["users/uid", "posts", "pid"]
-                if len(parts) >= 3:
-                    instance._parent_path = parts[0]
+            ref_path = doc.reference.path  # e.g. "users/uid/posts/pid"
+            parts = ref_path.rsplit("/", 2)  # ["users/uid", "posts", "pid"]
+            if len(parts) >= 3:
+                object.__setattr__(instance, '_parent_path', parts[0])
             yield instance
 
     # --------------------------------------------------------------------------
