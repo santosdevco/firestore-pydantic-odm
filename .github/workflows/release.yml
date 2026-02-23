@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Stage 1: run the full test matrix ─────────────────────────────────────
+  test:
+    uses: ./.github/workflows/test.yml
+
+  # ── Stage 2: bump version, tag, and create GitHub release ─────────────────
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history needed for version calculation
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Read current version from setup.py
+        id: current
+        run: |
+          version=$(python3 -c "
+          import re, pathlib
+          text = pathlib.Path('setup.py').read_text()
+          m = re.search(r'version\s*=\s*\"([^\"]+)\"', text)
+          print(m.group(1))
+          ")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate next version
+        id: next
+        run: |
+          current="${{ steps.current.outputs.version }}"
+          echo "Current version: $current"
+
+          # Parse major.minor.patch
+          IFS='.' read -r major minor patch <<< "$current"
+
+          # Determine bump type from commit messages since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --oneline)
+          else
+            COMMITS=$(git log "${LAST_TAG}..HEAD" --oneline)
+          fi
+
+          echo "Commits since last tag:"
+          echo "$COMMITS"
+
+          # Check commit messages for bump keywords
+          if echo "$COMMITS" | grep -qiE "BREAKING CHANGE|^.*!:"; then
+            bump="major"
+          elif echo "$COMMITS" | grep -qiE "^feat|^feature"; then
+            bump="minor"
+          else
+            bump="patch"
+          fi
+
+          echo "Bump type: $bump"
+
+          case $bump in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+
+          new_version="${major}.${minor}.${patch}"
+          echo "New version: $new_version"
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Update version in setup.py
+        run: |
+          sed -i 's/version="${{ steps.current.outputs.version }}"/version="${{ steps.next.outputs.version }}"/' setup.py
+          echo "Updated setup.py:"
+          grep 'version=' setup.py
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add setup.py
+          git commit -m "chore: bump version to ${{ steps.next.outputs.version }}"
+          git push
+
+      - name: Create and push tag
+        run: |
+          git tag "v${{ steps.next.outputs.version }}"
+          git push origin "v${{ steps.next.outputs.version }}"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            NOTES=$(git log --oneline --pretty=format:"- %s" | head -50)
+          else
+            NOTES=$(git log "${LAST_TAG}..HEAD^" --oneline --pretty=format:"- %s")
+          fi
+
+          # Write multiline output
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.next.outputs.version }}"
+          name: "v${{ steps.next.outputs.version }}"
+          body: |
+            ## What's Changed
+
+            ${{ steps.notes.outputs.notes }}
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.current.outputs.version && format('v{0}', steps.current.outputs.version) || '' }}...v${{ steps.next.outputs.version }}
+          generate_release_notes: true
