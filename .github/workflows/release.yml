@@ -139,6 +139,8 @@ jobs:
           generate_release_notes: true
 
       - name: Trigger publish workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Wait a moment for GitHub to register the tag
           sleep 5
