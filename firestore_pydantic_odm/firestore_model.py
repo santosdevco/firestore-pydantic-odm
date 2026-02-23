@@ -1,11 +1,20 @@
 import logging
 from typing import List, Tuple, Any, Optional, AsyncGenerator, Type, Union
-from .pydantic_compat import BaseModel, Field, get_model_fields
+from .pydantic_compat import (
+    BaseModel,
+    Field,
+    get_model_fields,
+    model_dump_compat,
+    get_model_config,
+    ConfigDict,
+    PydanticVersion,
+)
 from .enums import BatchOperation, OrderByDirection, FirestoreOperators
 from .firestore_client import FirestoreDB
 from .firestore_fields import  FirestoreField
 from google.cloud.firestore_v1 import AsyncClient
 from google.cloud.firestore_v1.field_path import FieldPath
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 
 # Alias for the first element in order-by tuple
@@ -39,9 +48,12 @@ class BaseFirestoreModel(BaseModel ):
     # --------------------------------------------------------------------------
     # Pydantic configuration
     # --------------------------------------------------------------------------
-    class Config:
-        allow_population_by_field_name = True
-        allow_population_by_alias = True
+    if PydanticVersion >= 2:
+        model_config = ConfigDict(**get_model_config())
+    else:
+        class Config:
+            allow_population_by_field_name = True
+            allow_population_by_alias = True
     @classmethod
     def initialize_fields(cls) -> None:
 
@@ -94,7 +106,8 @@ class BaseFirestoreModel(BaseModel ):
             raise RuntimeError("Database must be initialized before using the model.")
         db_client = self._db.client
 
-        data_to_save = self.dict(
+        data_to_save = model_dump_compat(
+            self,
             exclude={"id"},
             exclude_unset=exclude_unset,
             exclude_none=exclude_none,
@@ -133,7 +146,8 @@ class BaseFirestoreModel(BaseModel ):
         doc_ref = db_client.collection(self.collection_name).document(self.id)
 
         if include:
-            updates = self.dict(
+            updates = model_dump_compat(
+                self,
                 exclude={"id"},
                 include=include,
                 exclude_unset=exclude_unset,
@@ -141,7 +155,8 @@ class BaseFirestoreModel(BaseModel ):
                 by_alias=by_alias,
             )
         else:
-            updates = self.dict(
+            updates = model_dump_compat(
+                self,
                 exclude={"id"},
                 exclude_unset=exclude_unset,
                 exclude_none=exclude_none,
@@ -308,7 +323,7 @@ class BaseFirestoreModel(BaseModel ):
 
         # Apply filters
         for (field_name, op, value) in filters:
-            query = query.where(field_path=field_name, op_string=op, value=value)
+            query = query.where(filter=FieldFilter(field_name, op, value))
 
         # Projection
         if projection:
@@ -353,11 +368,15 @@ class BaseFirestoreModel(BaseModel ):
             if op == BatchOperation.CREATE:
                 if not model_instance.id:
                     model_instance.id = doc_ref.id
-                data_to_save = model_instance.dict(exclude={"id"}, by_alias=True, exclude_none=True)
+                data_to_save = model_dump_compat(
+                    model_instance, exclude={"id"}, by_alias=True, exclude_none=True
+                )
                 batch.set(doc_ref, data_to_save)
 
             elif op == BatchOperation.UPDATE:
-                data_to_update = model_instance.dict(exclude={"id"},  by_alias=True,exclude_none=True)
+                data_to_update = model_dump_compat(
+                    model_instance, exclude={"id"}, by_alias=True, exclude_none=True
+                )
                 batch.update(doc_ref, data_to_update)
 
             elif op == BatchOperation.DELETE:

@@ -29,7 +29,8 @@ setup(
     python_requires=">=3.8",
     install_requires=[
         "pydantic>=1.5,<3.0.0",
-        "google-cloud-firestore>=2.0.0",  # recent async fixes
+        "google-cloud-firestore>=2.11.0",  # Required for FieldFilter
+        "packaging",  # Used for version parsing in pydantic_compat
     ],
     extras_require={
         "emulator": ["google-cloud-firestore-emulator"],

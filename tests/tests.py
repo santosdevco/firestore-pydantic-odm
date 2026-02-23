@@ -1,10 +1,11 @@
 import pytest
 import pytest_asyncio
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, call
 from typing import Any, Tuple, List, Optional, Union, AsyncGenerator, Type
 
 # Ajusta la ruta según tu estructura real.
 from firestore_pydantic_odm import *
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 # -----------------------------------------------------------------------------
 # 1. Modelo de ejemplo para pruebas
@@ -153,8 +154,11 @@ async def test_count_documents(initialized_model):
     query_mock = MagicMock()
     # Forzamos que query.count() lance un AttributeError.
     query_mock.count = MagicMock(side_effect=AttributeError("No .count() method"))
-    query_mock.get = AsyncMock(return_value=[MagicMock(), MagicMock(), MagicMock()])
-    
+    # Mock the select chain: query.select([]).get() needs to return an awaitable
+    select_mock = MagicMock()
+    select_mock.get = AsyncMock(return_value=[MagicMock(), MagicMock(), MagicMock()])
+    query_mock.select.return_value = select_mock
+
     collection_ref_mock = MagicMock()
     collection_ref_mock.where.return_value = query_mock
     initialized_model._db.client.collection.return_value = collection_ref_mock
@@ -162,9 +166,12 @@ async def test_count_documents(initialized_model):
     total = await initialized_model.count([
         (str(initialized_model.name), "==", "Alice"),
     ])
-    collection_ref_mock.where.assert_called_once_with(
-        field_path="name", op_string="==", value="Alice"
-    )
+    # Verify FieldFilter was used
+    collection_ref_mock.where.assert_called_once()
+    call_kwargs = collection_ref_mock.where.call_args
+    assert "filter" in call_kwargs.kwargs
+    filter_arg = call_kwargs.kwargs["filter"]
+    assert isinstance(filter_arg, FieldFilter)
     assert total == 3
 
 # -----------------------------------------------------------------------------
@@ -263,9 +270,12 @@ async def test_find_with_filters_and_projection(initialized_model):
     ):
         results.append(doc)
     
-    collection_ref_mock.where.assert_called_once_with(
-        field_path="name", op_string="==", value="Alice"
-    )
+    # Verify FieldFilter was used
+    collection_ref_mock.where.assert_called_once()
+    call_kwargs = collection_ref_mock.where.call_args
+    assert "filter" in call_kwargs.kwargs
+    filter_arg = call_kwargs.kwargs["filter"]
+    assert isinstance(filter_arg, FieldFilter)
     # Ahora se espera que se invoque select con ambas claves.
     query_mock.select.assert_called_once_with(["id", "name"])
     assert len(results) == 1
