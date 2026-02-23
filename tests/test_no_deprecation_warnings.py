@@ -1,6 +1,9 @@
 """
 Tests to verify no deprecation warnings are raised with Pydantic V2.
 """
+import importlib
+import subprocess
+import sys
 import pytest
 import warnings
 
@@ -17,33 +20,38 @@ class TestNoDeprecationWarnings:
     """Tests that verify no deprecation warnings are raised."""
 
     def test_model_import_no_config_warnings(self):
-        """Test that importing models produces no config deprecation warnings."""
-        with warnings.catch_warnings(record=True) as caught_warnings:
-            warnings.simplefilter("always", DeprecationWarning)
+        """Test that importing models produces no config deprecation warnings.
 
-            # Re-import to trigger any config warnings
-            from firestore_pydantic_odm import BaseFirestoreModel
-
-            # Define a test model
-            class TestModel(BaseFirestoreModel):
-                class Settings:
-                    name = "test_collection"
-
-                name: str
-
-            # Filter for pydantic-related deprecation warnings
-            pydantic_warnings = [
-                w for w in caught_warnings
-                if "pydantic" in str(w.filename).lower()
-                or "pydantic" in str(w.message).lower()
-                or "Config" in str(w.message)
-                or "allow_population_by_field_name" in str(w.message)
-            ]
-
-            assert len(pydantic_warnings) == 0, (
-                f"Pydantic deprecation warnings found: "
-                f"{[str(w.message) for w in pydantic_warnings]}"
+        Uses a fresh subprocess so import-time warnings are always triggered,
+        regardless of whether the module is already cached in sys.modules.
+        """
+        code = (
+            "import warnings, sys\n"
+            "warnings.simplefilter('always', DeprecationWarning)\n"
+            "import firestore_pydantic_odm\n"
+            "from firestore_pydantic_odm import BaseFirestoreModel\n"
+            "class M(BaseFirestoreModel):\n"
+            "    class Settings:\n"
+            "        name = 'test_collection'\n"
+            "    name: str\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-W", "always::DeprecationWarning", "-c", code],
+            capture_output=True,
+            text=True,
+        )
+        pydantic_warnings = [
+            line for line in result.stderr.splitlines()
+            if "DeprecationWarning" in line and (
+                "pydantic" in line.lower()
+                or "Config" in line
+                or "allow_population_by_field_name" in line
             )
+        ]
+        assert pydantic_warnings == [], (
+            f"Pydantic deprecation warnings found during import:\n"
+            + "\n".join(pydantic_warnings)
+        )
 
     def test_model_dump_no_dict_warnings(self):
         """Test that model serialization produces no .dict() deprecation warnings."""
