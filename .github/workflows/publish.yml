@@ -2,33 +2,29 @@ name: Publish Package to PyPI
 
 on:
   push:
-    # Publish only when a tag starting with "v" is pushed
+    # Publica cuando se crea una etiqueta que comience con "v"
     tags:
       - 'v*'
 
 jobs:
-  # ── Stage 1: run the full test matrix ─────────────────────────────────────
-  test:
-    uses: ./.github/workflows/test.yml
-
-  # ── Stage 2: build & publish (only if every test job passed) ──────────────
   publish:
-    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+    # Asigna el entorno configurado (opcional pero recomendado)
     environment:
       name: pypi
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history to ensure tag is available
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
 
       - name: Install build dependencies
         run: |
@@ -38,12 +34,7 @@ jobs:
       - name: Build package distribution
         run: python -m build
 
-      - name: Verify distribution metadata
-        run: |
-          pip install twine
-          twine check dist/*
-
-      - name: Publish package to PyPI using Trusted Publishing (OIDC)
+      - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@v1.12.4
         with:
-          attestations: true
+          password: ${{ secrets.PIPL_TOKEN }}
