@@ -5,12 +5,26 @@ Validates subcollection CRUD, cascade delete, accessor pattern, isolation,
 parent path preservation, and collection group queries against a real backend.
 """
 
+import os
+
 import pytest
 import pytest_asyncio
 
 from .models import User, Post, Comment
 
 pytestmark = pytest.mark.asyncio
+
+# Collection-group queries require an explicit Firestore composite index
+# which must be deployed to the real project before the test can pass.
+# When running against the local emulator the index is not required.
+_needs_collection_group_index = pytest.mark.skipif(
+    not os.environ.get("FIRESTORE_EMULATOR_HOST"),
+    reason=(
+        "collection_group_find() requires a Firestore composite index that "
+        "must be deployed to the real project. Run with the emulator or "
+        "create the index first (see firestore.indexes.json)."
+    ),
+)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -287,6 +301,7 @@ async def test_parent_path_preservation(initialized_models):
 # ── Collection group queries ────────────────────────────────────────────────
 
 
+@_needs_collection_group_index
 async def test_collection_group_find(initialized_models):
     """collection_group_find() returns documents across all parents."""
     user_a = await _create_user(name="GroupA", email="ga@test.com")
