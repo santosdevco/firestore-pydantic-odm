@@ -66,6 +66,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa-key.json
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
           DATABASE: ${{ secrets.GCP_DATABASE }}
+          BATCH_LIMIT_TEST_SIZE: ${{ vars.BATCH_LIMIT_TEST_SIZE || '50' }}
 
       - name: Cleanup credentials
         if: always()

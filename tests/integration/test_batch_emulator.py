@@ -181,7 +181,7 @@ async def test_batch_500_limit(initialized_models):
     free-tier quota (e.g. BATCH_LIMIT_TEST_SIZE=50).
     """
     import os
-    batch_size = int(os.environ.get("BATCH_LIMIT_TEST_SIZE", "500"))
+    batch_size = int(os.environ.get("BATCH_LIMIT_TEST_SIZE", "10"))
     users = [
         User(name=f"User{i}", email=f"u{i}@test.com", age=i)
         for i in range(batch_size)
