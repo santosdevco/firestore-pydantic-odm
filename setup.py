@@ -14,7 +14,7 @@ except (ImportError, OSError):
 
 setup(
     name="firestore_pydantic_odm",
-    version="1.0.19",
+    version="1.0.20",
     description="Asynchronous Pydantic ODM for Google Cloud Firestore",
     long_description=README,
     long_description_content_type=long_description_content_type,
