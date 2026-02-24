@@ -8,7 +8,10 @@ Emulator mode:  FIRESTORE_EMULATOR_HOST=localhost:8080  (fast, no creds)
 Real mode:      FIRESTORE_EMULATOR_HOST unset/empty      (needs GCP creds)
 """
 
+import json
+import logging
 import os
+import warnings
 
 import pytest
 import pytest_asyncio
@@ -18,14 +21,33 @@ from firestore_pydantic_odm import FirestoreDB, init_firestore_odm
 
 from .models import User, Post, Comment, Product
 
+logger = logging.getLogger(__name__)
+
 # ── Environment detection ────────────────────────────────────────────────────
 
 EMULATOR_HOST = os.environ.get("FIRESTORE_EMULATOR_HOST", "").strip()
-PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "test-project")
 DATABASE = os.environ.get("DATABASE", None) or None
 CREDENTIALS_PATH = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
 
 IS_EMULATOR = bool(EMULATOR_HOST)
+
+# ``os.environ.get("GOOGLE_CLOUD_PROJECT", "test-project")`` returns ``""``
+# (not the default) when GitHub Actions expands an unset secret to an empty
+# string.  Use ``or`` so empty string still falls through to the fallback.
+PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT") or ""
+
+if not PROJECT_ID and not IS_EMULATOR and CREDENTIALS_PATH:
+    # Extract the project from the service-account JSON so the Firestore
+    # client never receives an empty project string (which causes
+    # RESOURCE_PROJECT_INVALID on RunQuery / streaming calls).
+    try:
+        with open(CREDENTIALS_PATH) as _f:
+            PROJECT_ID = json.load(_f).get("project_id", "") or ""
+    except Exception as _exc:
+        logger.warning("Could not read project_id from SA file: %s", _exc)
+
+if not PROJECT_ID:
+    PROJECT_ID = "test-project"
 
 ALL_MODELS = [User, Post, Comment, Product]
 TEST_COLLECTIONS = ["users", "products"]  # top-level only
@@ -81,7 +103,18 @@ async def clean_firestore(firestore_db):
             await client.delete(url)
     else:
         client = firestore_db.client
-        await _cleanup_real_firestore(client, TEST_COLLECTIONS)
+        try:
+            await _cleanup_real_firestore(client, TEST_COLLECTIONS)
+        except Exception as exc:  # noqa: BLE001
+            # A cleanup failure must NOT be re-raised: doing so turns a
+            # passing test into a FAILED+ERROR pair (pytest marks the test
+            # as failed when a fixture teardown raises).  Log a warning so
+            # the problem is still visible without cascading into test results.
+            warnings.warn(
+                f"[conftest] Firestore cleanup error (data may leak between "
+                f"tests): {exc}",
+                stacklevel=1,
+            )
 
 
 async def _cleanup_real_firestore(client, collections: list):

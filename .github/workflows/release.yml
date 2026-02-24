@@ -30,6 +30,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        run: |
+          missing=()
+          [[ -z "${{ secrets.GCP_SA_KEY }}"      ]] && missing+=("GCP_SA_KEY")
+          [[ -z "${{ secrets.GCP_PROJECT_ID }}"  ]] && missing+=("GCP_PROJECT_ID")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "❌ The following required GitHub secrets are not set: ${missing[*]}"
+            echo "   Configure them at: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "✅ All required secrets are present."
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
