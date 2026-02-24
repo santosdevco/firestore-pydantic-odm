@@ -3,6 +3,7 @@ from typing import ClassVar, List, Tuple, Any, Optional, AsyncGenerator, Type, U
 from .pydantic_compat import (
     BaseModel,
     Field,
+    PrivateAttr,
     get_model_fields,
     model_dump_compat,
     get_model_config,
@@ -38,7 +39,7 @@ class BaseFirestoreModel(BaseModel ):
     # Class attribute for injected FirestoreDB instance
     # --------------------------------------------------------------------------
     _db: ClassVar[Optional["FirestoreDB"]] = None  # Injected externally
-    _parent_path: ClassVar[Optional[str]] = None  # Stores parent doc path for subcollections
+    _parent_path: Optional[str] = PrivateAttr(default=None)  # Per-instance, excluded from dict()/model_dump()
     _registered_models: ClassVar[list] = []  # Populated by init_firestore_odm
 
     # --------------------------------------------------------------------------

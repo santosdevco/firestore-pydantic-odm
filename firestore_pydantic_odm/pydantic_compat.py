@@ -16,6 +16,7 @@ else:
 
 BaseModel: type = pydantic.BaseModel
 Field: type = pydantic.Field
+PrivateAttr: type = pydantic.PrivateAttr
 
 # Import ConfigDict for Pydantic V2, None for V1
 if PydanticVersion >= 2:
@@ -68,6 +69,7 @@ def get_model_config() -> dict:
 __all__ = [
     "BaseModel",
     "Field",
+    "PrivateAttr",
     "ConfigDict",
     "get_model_fields",
     "model_dump_compat",
