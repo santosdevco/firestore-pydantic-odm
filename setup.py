@@ -34,7 +34,7 @@ setup(
     ],
     extras_require={
         "emulator": ["google-cloud-firestore-emulator"],
-        "dev": ["black", "ruff", "pytest", "pytest-asyncio"],
+        "dev": ["black", "ruff", "pytest", "pytest-asyncio", "httpx"],
     },
     classifiers=[
         "Development Status :: 4 - Beta",

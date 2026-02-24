@@ -9,7 +9,73 @@ permissions:
   contents: write
 
 jobs:
+  # ── Step 1: Run integration tests against REAL Firestore ────────────
+  test-real-firestore:
+    if: github.event.pull_request.merged == true
+    name: "Real Firestore — Py ${{ matrix.python-version }} / ${{ matrix.pydantic-version }}"
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        pydantic-version:
+          - "pydantic>=1.5,<2.0"
+          - "pydantic>=2.0,<2.11"
+          - "pydantic>=2.11"
+        exclude:
+          - python-version: "3.12"
+            pydantic-version: "pydantic>=1.5,<2.0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install "${{ matrix.pydantic-version }}"
+          pip install -e ".[dev]"
+
+      - name: Configure GCP credentials
+        run: |
+          echo "${{ secrets.GCP_SA_KEY }}" | base64 -d > /tmp/sa-key.json
+
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short --ignore=tests/integration
+
+      - name: Run integration tests (real Firestore)
+        run: pytest tests/integration/ -v --tb=short
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa-key.json
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+          DATABASE: ${{ secrets.GCP_DATABASE }}
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f /tmp/sa-key.json
+
+  # ── Gate: all real-firestore tests must pass ────────────────────────
+  release-gate:
+    name: "All real Firestore tests passed"
+    runs-on: ubuntu-latest
+    needs: test-real-firestore
+    if: always()
+    steps:
+      - name: Check result
+        run: |
+          if [[ "${{ needs.test-real-firestore.result }}" != "success" ]]; then
+            echo "Real Firestore tests failed — aborting release."
+            exit 1
+          fi
+
+  # ── Step 2: Version bump + tag + publish ────────────────────────────
   release:
+    needs: release-gate
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
