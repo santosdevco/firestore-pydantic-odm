@@ -42,6 +42,18 @@ jobs:
           fi
           echo "✅ All required secrets are present."
 
+      - name: Show environment configuration
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Integration Test Environment"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}"
+          echo "  GCP_DATABASE: ${{ secrets.GCP_DATABASE || '(default)' }}"
+          echo "  BATCH_LIMIT_TEST_SIZE: ${{ vars.BATCH_LIMIT_TEST_SIZE || '50' }}"
+          echo "  GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa-key.json"
+          echo "  SA Key file size: $(echo '${{ secrets.GCP_SA_KEY }}' | wc -c) chars"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
