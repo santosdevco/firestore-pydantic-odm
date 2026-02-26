@@ -90,9 +90,18 @@ def raw_client(firestore_db):
 
 @pytest_asyncio.fixture(autouse=True)
 async def clean_firestore(firestore_db):
-    """Wipe all data AFTER each test for isolation."""
+    """Wipe all data BEFORE and AFTER each test for complete isolation."""
+    # Clean BEFORE test to ensure fresh state
+    await _perform_cleanup(firestore_db)
+    
     yield  # ← test runs here
 
+    # Clean AFTER test to avoid data leaks
+    await _perform_cleanup(firestore_db)
+
+
+async def _perform_cleanup(firestore_db):
+    """Perform cleanup operation for emulator or real Firestore."""
     if IS_EMULATOR:
         db_name = DATABASE or "(default)"
         url = (
@@ -118,20 +127,61 @@ async def clean_firestore(firestore_db):
 
 
 async def _cleanup_real_firestore(client, collections: list):
-    """Delete all documents in the specified collections (recursive, 3 levels)."""
+    """Delete all documents in the specified collections (recursive, 3 levels).
+    
+    Uses batch operations for better performance and reliability.
+    """
     for col_name in collections:
+        # Collect all document references in this collection
+        docs = []
         async for doc in client.collection(col_name).stream():
-            # Level 2 subcollections
-            subcols = doc.reference.collections()
-            async for subcol in subcols:
-                async for subdoc in subcol.stream():
-                    # Level 3 subcollections
-                    sub_subcols = subdoc.reference.collections()
-                    async for sub_subcol in sub_subcols:
-                        async for sub_subdoc in sub_subcol.stream():
-                            await sub_subdoc.reference.delete()
-                    await subdoc.reference.delete()
-            await doc.reference.delete()
+            docs.append(doc)
+        
+        # Delete in batches (Firestore limit: 500 operations per batch)
+        batch_size = 500
+        for i in range(0, len(docs), batch_size):
+            batch = client.batch()
+            batch_docs = docs[i:i + batch_size]
+            
+            for doc in batch_docs:
+                # Delete subcollections first (up to 3 levels deep)
+                await _delete_subcollections(client, doc.reference, depth=3)
+                # Then delete the document itself
+                batch.delete(doc.reference)
+            
+            await batch.commit()
+
+
+async def _delete_subcollections(client, doc_ref, depth: int):
+    """Recursively delete all subcollections of a document up to specified depth."""
+    if depth <= 0:
+        return
+    
+    # List all subcollections of this document
+    try:
+        subcols = [col async for col in doc_ref.collections()]
+    except Exception:
+        # If we can't list subcollections, skip
+        return
+    
+    for subcol in subcols:
+        # Get all documents in this subcollection
+        subdocs = []
+        async for subdoc in subcol.stream():
+            subdocs.append(subdoc)
+        
+        # Delete in batches
+        batch_size = 500
+        for i in range(0, len(subdocs), batch_size):
+            batch = client.batch()
+            batch_docs = subdocs[i:i + batch_size]
+            
+            for subdoc in batch_docs:
+                # Recursively delete deeper subcollections
+                await _delete_subcollections(client, subdoc.reference, depth - 1)
+                batch.delete(subdoc.reference)
+            
+            await batch.commit()
 
 
 @pytest_asyncio.fixture
