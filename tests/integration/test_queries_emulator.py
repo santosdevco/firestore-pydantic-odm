@@ -5,6 +5,7 @@ Validates that Firestore queries actually return correct results against
 a real backend (emulator or production).
 """
 
+import os
 import pytest
 import pytest_asyncio
 
@@ -12,30 +13,47 @@ from .models import User, Product
 
 pytestmark = pytest.mark.asyncio
 
+# Multi-field ordering requires a composite index that would need to be
+# created for each unique collection prefix in real Firestore
+_requires_emulator = pytest.mark.skipif(
+    not os.environ.get("FIRESTORE_EMULATOR_HOST"),
+    reason=(
+        "Multi-field ordering requires a Firestore composite index. "
+        "With collection prefixes, the index name changes per run, "
+        "making it impractical for real Firestore. Run with emulator."
+    ),
+)
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
-async def _seed_users(initialized_models):
-    """Insert a known set of users for query testing."""
+async def _seed_users(initialized_models, test_id=""):
+    """Insert a known set of users for query testing.
+    
+    test_id: Unique identifier to isolate test data when no cleanup is performed.
+    """
     users = [
-        User(name="Alice", email="alice@test.com", age=30),
-        User(name="Bob", email="bob@test.com", age=25),
-        User(name="Charlie", email="charlie@test.com", age=35),
-        User(name="Diana", email="diana@test.com", age=20),
-        User(name="Eve", email="eve@test.com", age=30),
+        User(id=f"{test_id}alice", name="Alice", email=f"alice-{test_id}@test.com", age=30),
+        User(id=f"{test_id}bob", name="Bob", email=f"bob-{test_id}@test.com", age=25),
+        User(id=f"{test_id}charlie", name="Charlie", email=f"charlie-{test_id}@test.com", age=35),
+        User(id=f"{test_id}diana", name="Diana", email=f"diana-{test_id}@test.com", age=20),
+        User(id=f"{test_id}eve", name="Eve", email=f"eve-{test_id}@test.com", age=30),
     ]
     for u in users:
         await u.save()
     return users
 
 
-async def _seed_products(initialized_models):
-    """Insert a known set of products for query testing."""
+async def _seed_products(initialized_models, test_id=""):
+    """Insert a known set of products for query testing.
+    
+    test_id: Unique identifier to isolate test data when no cleanup is performed.
+    """
     products = [
-        Product(title="Python Book", price=29.99, tags=["python", "programming"]),
-        Product(title="Go Book", price=24.99, tags=["go", "programming"]),
-        Product(title="Rust Book", price=34.99, tags=["rust", "systems"]),
+        Product(id=f"{test_id}python", title="Python Book", price=29.99, tags=["python", "programming"]),
+        Product(id=f"{test_id}go", title="Go Book", price=24.99, tags=["go", "programming"]),
+        Product(id=f"{test_id}rust", title="Rust Book", price=34.99, tags=["rust", "systems"]),
     ]
     for p in products:
         await p.save()
@@ -52,8 +70,9 @@ async def _collect(async_gen) -> list:
 
 async def test_find_all_no_filters(initialized_models):
     """find() with no filters returns all documents."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find())
+    users = await _seed_users(initialized_models, "find_all_")
+    # Filter to only our test's documents
+    results = await _collect(User.find(filters=[User.id.in_([u.id for u in users])]))
     assert len(results) == 5
 
 
@@ -62,16 +81,22 @@ async def test_find_all_no_filters(initialized_models):
 
 async def test_find_with_eq_filter(initialized_models):
     """Equality filter returns matching documents."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find(filters=[User.name == "Alice"]))
+    users = await _seed_users(initialized_models, "eq_filter_")
+    results = await _collect(User.find(filters=[
+        User.name == "Alice",
+        User.id.in_([u.id for u in users])
+    ]))
     assert len(results) == 1
     assert results[0].name == "Alice"
 
 
 async def test_find_with_ne_filter(initialized_models):
     """Not-equal filter excludes specified value."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find(filters=[User.name != "Alice"]))
+    users = await _seed_users(initialized_models, "ne_filter_")
+    results = await _collect(User.find(filters=[
+        User.name != "Alice",
+        User.id.in_([u.id for u in users])
+    ]))
     assert len(results) == 4
     names = {r.name for r in results}
     assert "Alice" not in names
@@ -82,31 +107,43 @@ async def test_find_with_ne_filter(initialized_models):
 
 async def test_find_with_gt_filter(initialized_models):
     """Greater-than filter works correctly."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find(filters=[User.age > 30]))
+    users = await _seed_users(initialized_models, "gt_filter_")
+    results = await _collect(User.find(filters=[
+        User.age > 30,
+        User.id.in_([u.id for u in users])
+    ]))
     assert len(results) == 1
     assert results[0].name == "Charlie"
 
 
 async def test_find_with_gte_filter(initialized_models):
     """Greater-than-or-equal filter works correctly."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find(filters=[User.age >= 30]))
+    users = await _seed_users(initialized_models, "gte_filter_")
+    results = await _collect(User.find(filters=[
+        User.age >= 30,
+        User.id.in_([u.id for u in users])
+    ]))
     assert len(results) == 3  # Alice(30), Charlie(35), Eve(30)
 
 
 async def test_find_with_lt_filter(initialized_models):
     """Less-than filter works correctly."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find(filters=[User.age < 25]))
+    users = await _seed_users(initialized_models, "lt_filter_")
+    results = await _collect(User.find(filters=[
+        User.age < 25,
+        User.id.in_([u.id for u in users])
+    ]))
     assert len(results) == 1
     assert results[0].name == "Diana"
 
 
 async def test_find_with_lte_filter(initialized_models):
     """Less-than-or-equal filter works correctly."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find(filters=[User.age <= 25]))
+    users = await _seed_users(initialized_models, "lte_filter_")
+    results = await _collect(User.find(filters=[
+        User.age <= 25,
+        User.id.in_([u.id for u in users])
+    ]))
     assert len(results) == 2  # Bob(25), Diana(20)
 
 
@@ -115,9 +152,13 @@ async def test_find_with_lte_filter(initialized_models):
 
 async def test_find_with_in_filter(initialized_models):
     """IN filter returns documents matching any value in the list."""
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "in_filter_")
+    test_ids = [u.id for u in users]
     results = await _collect(
-        User.find(filters=[User.name.in_(["Alice", "Bob"])])
+        User.find(filters=[
+            User.name.in_(["Alice", "Bob"]),
+            User.id.in_(test_ids)
+        ])
     )
     assert len(results) == 2
     names = {r.name for r in results}
@@ -126,9 +167,13 @@ async def test_find_with_in_filter(initialized_models):
 
 async def test_find_with_not_in_filter(initialized_models):
     """NOT_IN filter excludes documents matching values in the list."""
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "not_in_filter_")
+    test_ids = [u.id for u in users]
     results = await _collect(
-        User.find(filters=[User.name.not_in_(["Charlie", "Diana"])])
+        User.find(filters=[
+            User.name.not_in_(["Charlie", "Diana"]),
+            User.id.in_(test_ids)
+        ])
     )
     assert len(results) == 3
     names = {r.name for r in results}
@@ -141,9 +186,12 @@ async def test_find_with_not_in_filter(initialized_models):
 
 async def test_find_with_array_contains(initialized_models):
     """array_contains filter returns documents whose array field contains the value."""
-    await _seed_products(initialized_models)
+    products = await _seed_products(initialized_models, "array_cont_")
     results = await _collect(
-        Product.find(filters=[Product.tags.array_contains("python")])
+        Product.find(filters=[
+            Product.tags.array_contains("python"),
+            Product.id.in_([p.id for p in products])
+        ])
     )
     assert len(results) == 1
     assert results[0].title == "Python Book"
@@ -151,9 +199,12 @@ async def test_find_with_array_contains(initialized_models):
 
 async def test_find_with_array_contains_any(initialized_models):
     """array_contains_any returns docs containing any of the specified values."""
-    await _seed_products(initialized_models)
+    products = await _seed_products(initialized_models, "array_any_")
     results = await _collect(
-        Product.find(filters=[Product.tags.array_contains_any(["python", "go"])])
+        Product.find(filters=[
+            Product.tags.array_contains_any(["python", "go"]),
+            Product.id.in_([p.id for p in products])
+        ])
     )
     assert len(results) == 2
     titles = {r.title for r in results}
@@ -165,9 +216,13 @@ async def test_find_with_array_contains_any(initialized_models):
 
 async def test_find_with_multiple_filters(initialized_models):
     """Combined filters narrow results correctly."""
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "multi_filter_")
     results = await _collect(
-        User.find(filters=[User.age >= 25, User.age <= 30])
+        User.find(filters=[
+            User.age >= 25,
+            User.age <= 30,
+            User.id.in_([u.id for u in users])
+        ])
     )
     assert len(results) == 3  # Alice(30), Bob(25), Eve(30)
 
@@ -179,9 +234,12 @@ async def test_find_order_by_ascending(initialized_models):
     """Results sorted ascending by field."""
     from firestore_pydantic_odm import OrderByDirection
 
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "order_asc_")
     results = await _collect(
-        User.find(order_by=(User.name, OrderByDirection.ASCENDING))
+        User.find(
+            filters=[User.id.in_([u.id for u in users])],
+            order_by=(User.name, OrderByDirection.ASCENDING)
+        )
     )
     names = [r.name for r in results]
     assert names == sorted(names)
@@ -191,21 +249,26 @@ async def test_find_order_by_descending(initialized_models):
     """Results sorted descending by field."""
     from firestore_pydantic_odm import OrderByDirection
 
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "order_desc_")
     results = await _collect(
-        User.find(order_by=(User.name, OrderByDirection.DESCENDING))
+        User.find(
+            filters=[User.id.in_([u.id for u in users])],
+            order_by=(User.name, OrderByDirection.DESCENDING)
+        )
     )
     names = [r.name for r in results]
     assert names == sorted(names, reverse=True)
 
 
+@_requires_emulator
 async def test_find_order_by_multiple_fields(initialized_models):
     """Multi-field ordering works correctly."""
     from firestore_pydantic_odm import OrderByDirection
 
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "order_multi_")
     results = await _collect(
         User.find(
+            filters=[User.id.in_([u.id for u in users])],
             order_by=[
                 (User.age, OrderByDirection.ASCENDING),
                 (User.name, OrderByDirection.ASCENDING),
@@ -222,8 +285,11 @@ async def test_find_order_by_multiple_fields(initialized_models):
 
 async def test_find_with_limit(initialized_models):
     """limit restricts the number of returned results."""
-    await _seed_users(initialized_models)
-    results = await _collect(User.find(limit=2))
+    users = await _seed_users(initialized_models, "limit_")
+    results = await _collect(User.find(
+        filters=[User.id.in_([u.id for u in users])],
+        limit=2
+    ))
     assert len(results) == 2
 
 
@@ -231,12 +297,17 @@ async def test_find_with_offset(initialized_models):
     """offset skips the first N results."""
     from firestore_pydantic_odm import OrderByDirection
 
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "offset_")
+    test_ids = [u.id for u in users]
     all_results = await _collect(
-        User.find(order_by=(User.name, OrderByDirection.ASCENDING))
+        User.find(
+            filters=[User.id.in_(test_ids)],
+            order_by=(User.name, OrderByDirection.ASCENDING)
+        )
     )
     offset_results = await _collect(
         User.find(
+            filters=[User.id.in_(test_ids)],
             order_by=(User.name, OrderByDirection.ASCENDING),
             offset=2,
         )
@@ -249,9 +320,10 @@ async def test_find_with_limit_and_offset(initialized_models):
     """Combined limit + offset implements pagination."""
     from firestore_pydantic_odm import OrderByDirection
 
-    await _seed_users(initialized_models)
+    users = await _seed_users(initialized_models, "limit_offset_")
     page = await _collect(
         User.find(
+            filters=[User.id.in_([u.id for u in users])],
             order_by=(User.name, OrderByDirection.ASCENDING),
             offset=1,
             limit=2,
@@ -265,16 +337,22 @@ async def test_find_with_limit_and_offset(initialized_models):
 
 async def test_find_one_returns_first(initialized_models):
     """find_one() returns a single matching document."""
-    await _seed_users(initialized_models)
-    result = await User.find_one(filters=[User.name == "Bob"])
+    users = await _seed_users(initialized_models, "find_one_")
+    result = await User.find_one(filters=[
+        User.name == "Bob",
+        User.id.in_([u.id for u in users])
+    ])
     assert result is not None
     assert result.name == "Bob"
 
 
 async def test_find_one_no_match_returns_none(initialized_models):
     """find_one() with no match returns None."""
-    await _seed_users(initialized_models)
-    result = await User.find_one(filters=[User.name == "Nonexistent"])
+    users = await _seed_users(initialized_models, "find_one_none_")
+    result = await User.find_one(filters=[
+        User.name == "Nonexistent",
+        User.id.in_([u.id for u in users])
+    ])
     assert result is None
 
 
@@ -283,13 +361,16 @@ async def test_find_one_no_match_returns_none(initialized_models):
 
 async def test_count_with_filters(initialized_models):
     """count() with filters returns the correct count."""
-    await _seed_users(initialized_models)
-    total = await User.count(filters=[User.age == 30])
+    users = await _seed_users(initialized_models, "count_filter_")
+    total = await User.count(filters=[
+        User.age == 30,
+        User.id.in_([u.id for u in users])
+    ])
     assert total == 2  # Alice and Eve
 
 
 async def test_count_all(initialized_models):
     """count() with empty filters returns total document count."""
-    await _seed_users(initialized_models)
-    total = await User.count(filters=[])
+    users = await _seed_users(initialized_models, "count_all_")
+    total = await User.count(filters=[User.id.in_([u.id for u in users])])
     assert total == 5
