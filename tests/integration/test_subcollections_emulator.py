@@ -14,15 +14,16 @@ from .models import User, Post, Comment
 
 pytestmark = pytest.mark.asyncio
 
-# Collection-group queries require an explicit Firestore composite index
-# which must be deployed to the real project before the test can pass.
-# When running against the local emulator the index is not required.
+# Collection-group queries require an explicit Firestore composite index.
+# Works in:
+# - Emulator (indexes auto-created)
+# - Real Firestore with deployed indexes (see firestore.indexes.json)
 _needs_collection_group_index = pytest.mark.skipif(
-    not os.environ.get("FIRESTORE_EMULATOR_HOST"),
+    not os.environ.get("FIRESTORE_EMULATOR_HOST") and
+    os.environ.get("USE_CI_FIXED_PREFIX", "").lower() != "true",
     reason=(
-        "collection_group_find() requires a Firestore composite index that "
-        "must be deployed to the real project. Run with the emulator or "
-        "create the index first (see firestore.indexes.json)."
+        "collection_group_find() requires deployed composite indexes. "
+        "Run with emulator or set USE_CI_FIXED_PREFIX=true with deployed indexes."
     ),
 )
 
