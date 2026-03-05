@@ -54,7 +54,7 @@ async def test_save_subcollection_doc(initialized_models, raw_client):
     assert post.id is not None
 
     # Verify via raw SDK at the correct path
-    doc = await raw_client.document(f"users/{user.id}/posts/{post.id}").get()
+    doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post.id}").get()
     assert doc.exists
     data = doc.to_dict()
     assert data["title"] == "Hello World"
@@ -73,7 +73,7 @@ async def test_save_deep_nesting(initialized_models, raw_client):
     assert comment.id is not None
 
     # Verify the full path via raw SDK
-    full_path = f"users/{user.id}/posts/{post.id}/comments/{comment.id}"
+    full_path = f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post.id}/{Comment.Settings.name}/{comment.id}"
     doc = await raw_client.document(full_path).get()
     assert doc.exists
     assert doc.to_dict()["text"] == "Great post!"
@@ -132,7 +132,7 @@ async def test_update_subcollection_doc(initialized_models, raw_client):
     post.title = "Updated"
     await post.update()
 
-    doc = await raw_client.document(f"users/{user.id}/posts/{post.id}").get()
+    doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post.id}").get()
     assert doc.to_dict()["title"] == "Updated"
 
 
@@ -148,7 +148,7 @@ async def test_delete_subcollection_doc(initialized_models, raw_client):
 
     await post.delete()
 
-    doc = await raw_client.document(f"users/{user.id}/posts/{pid}").get()
+    doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{pid}").get()
     assert not doc.exists
 
 
@@ -166,13 +166,13 @@ async def test_cascade_delete(initialized_models, raw_client):
     await user.delete(cascade=True)
 
     # User should be gone
-    user_doc = await raw_client.document(f"users/{user.id}").get()
+    user_doc = await raw_client.document(f"{User.Settings.name}/{user.id}").get()
     assert not user_doc.exists
 
     # Posts should be gone
-    post1_doc = await raw_client.document(f"users/{user.id}/posts/{post1.id}").get()
+    post1_doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post1.id}").get()
     assert not post1_doc.exists
-    post2_doc = await raw_client.document(f"users/{user.id}/posts/{post2.id}").get()
+    post2_doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post2.id}").get()
     assert not post2_doc.exists
 
 
@@ -187,11 +187,11 @@ async def test_cascade_delete_deep(initialized_models, raw_client):
     await user.delete(cascade=True)
 
     # All levels should be gone
-    user_doc = await raw_client.document(f"users/{user.id}").get()
+    user_doc = await raw_client.document(f"{User.Settings.name}/{user.id}").get()
     assert not user_doc.exists
-    post_doc = await raw_client.document(f"users/{user.id}/posts/{post.id}").get()
+    post_doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post.id}").get()
     assert not post_doc.exists
-    comment_path = f"users/{user.id}/posts/{post.id}/comments/{comment.id}"
+    comment_path = f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post.id}/{Comment.Settings.name}/{comment.id}"
     comment_doc = await raw_client.document(comment_path).get()
     assert not comment_doc.exists
 
@@ -233,7 +233,7 @@ async def test_subcollection_accessor_add(initialized_models, raw_client):
     result = await user.subcollection(Post).add(post)
 
     assert result.id is not None
-    doc = await raw_client.document(f"users/{user.id}/posts/{result.id}").get()
+    doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{result.id}").get()
     assert doc.exists
     assert doc.to_dict()["title"] == "Via Accessor"
 
@@ -290,12 +290,12 @@ async def test_parent_path_preservation(initialized_models):
 
     # After get
     fetched = await Post.get(post.id, parent=user)
-    assert fetched._parent_path == f"users/{user.id}"
+    assert fetched._parent_path == f"{User.Settings.name}/{user.id}"
 
     # After find
     found = await _collect(Post.find(parent=user))
     assert len(found) == 1
-    assert found[0]._parent_path == f"users/{user.id}"
+    assert found[0]._parent_path == f"{User.Settings.name}/{user.id}"
 
 
 # ── Collection group queries ────────────────────────────────────────────────
@@ -328,7 +328,7 @@ async def test_sdk_write_subcollection_odm_read(initialized_models, raw_client):
     user = await _create_user()
 
     # Write via raw SDK
-    await raw_client.document(f"users/{user.id}/posts/sdk-post-1").set(
+    await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/sdk-post-1").set(
         {"title": "SDK Post", "body": "Written by SDK", "published": False}
     )
 

@@ -35,11 +35,11 @@ async def test_create_parity(initialized_models, raw_client):
 
     # SDK create
     sdk_data = {"name": "SDK User", "email": "sdk@test.com", "age": 30}
-    await raw_client.collection("users").document("sdk-parity-1").set(sdk_data)
+    await raw_client.collection(User.Settings.name).document("sdk-parity-1").set(sdk_data)
 
     # Read both via raw SDK and compare structure
-    odm_doc = await raw_client.collection("users").document(odm_user.id).get()
-    sdk_doc = await raw_client.collection("users").document("sdk-parity-1").get()
+    odm_doc = await raw_client.collection(User.Settings.name).document(odm_user.id).get()
+    sdk_doc = await raw_client.collection(User.Settings.name).document("sdk-parity-1").get()
 
     assert odm_doc.exists
     assert sdk_doc.exists
@@ -57,7 +57,7 @@ async def test_create_parity(initialized_models, raw_client):
 
 async def test_read_parity(initialized_models, raw_client):
     """ODM get and SDK get return identical data for the same document."""
-    await raw_client.collection("users").document("read-parity").set(
+    await raw_client.collection(User.Settings.name).document("read-parity").set(
         {"name": "Parity", "email": "parity@test.com", "age": 42}
     )
 
@@ -66,7 +66,7 @@ async def test_read_parity(initialized_models, raw_client):
     assert odm_result is not None
 
     # Read via SDK
-    sdk_doc = await raw_client.collection("users").document("read-parity").get()
+    sdk_doc = await raw_client.collection(User.Settings.name).document("read-parity").get()
     sdk_data = sdk_doc.to_dict()
 
     assert odm_result.name == sdk_data["name"]
@@ -89,7 +89,7 @@ async def test_update_parity(initialized_models, raw_client):
     await user.update()
 
     # Read via SDK
-    doc = await raw_client.collection("users").document(user.id).get()
+    doc = await raw_client.collection(User.Settings.name).document(user.id).get()
     data = doc.to_dict()
 
     assert data["name"] == "AfterUpdate"
@@ -105,18 +105,18 @@ async def test_delete_parity(initialized_models, raw_client):
     # Create two docs
     user_odm = User(name="ODM Del", email="od@test.com")
     await user_odm.save()
-    await raw_client.collection("users").document("sdk-del").set(
+    await raw_client.collection(User.Settings.name).document("sdk-del").set(
         {"name": "SDK Del", "email": "sd@test.com", "age": 0}
     )
 
     # Delete via ODM
     await user_odm.delete()
     # Delete via SDK
-    await raw_client.collection("users").document("sdk-del").delete()
+    await raw_client.collection(User.Settings.name).document("sdk-del").delete()
 
     # Both should be gone
-    doc_odm = await raw_client.collection("users").document(user_odm.id).get()
-    doc_sdk = await raw_client.collection("users").document("sdk-del").get()
+    doc_odm = await raw_client.collection(User.Settings.name).document(user_odm.id).get()
+    doc_sdk = await raw_client.collection(User.Settings.name).document("sdk-del").get()
     assert not doc_odm.exists
     assert not doc_sdk.exists
 
@@ -138,7 +138,7 @@ async def test_query_parity(initialized_models, raw_client):
 
     # SDK query
     sdk_results = []
-    query = raw_client.collection("users").where(
+    query = raw_client.collection(User.Settings.name).where(
         filter=FieldFilter("age", ">=", 25)
     )
     async for doc in query.stream():
@@ -167,7 +167,7 @@ async def test_ordering_parity(initialized_models, raw_client):
 
     # SDK ordering
     sdk_names = []
-    query = raw_client.collection("users").order_by("name")
+    query = raw_client.collection(User.Settings.name).order_by("name")
     async for doc in query.stream():
         sdk_names.append(doc.to_dict()["name"])
 
@@ -187,7 +187,7 @@ async def test_subcollection_path_parity(initialized_models, raw_client):
     await post.save(parent=user)
 
     # Expected path
-    expected_path = f"users/{user.id}/posts/{post.id}"
+    expected_path = f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{post.id}"
 
     # Read via raw SDK using the expected path
     doc = await raw_client.document(expected_path).get()
@@ -209,19 +209,19 @@ async def test_batch_parity(initialized_models, raw_client):
 
     # SDK batch create
     batch = raw_client.batch()
-    ref1 = raw_client.collection("users").document("sdk-batch-1")
-    ref2 = raw_client.collection("users").document("sdk-batch-2")
+    ref1 = raw_client.collection(User.Settings.name).document("sdk-batch-1")
+    ref2 = raw_client.collection(User.Settings.name).document("sdk-batch-2")
     batch.set(ref1, {"name": "Batch SDK 1", "email": "bs1@test.com", "age": 0})
     batch.set(ref2, {"name": "Batch SDK 2", "email": "bs2@test.com", "age": 0})
     await batch.commit()
 
     # Verify all 4 exist
     for u in odm_users:
-        doc = await raw_client.collection("users").document(u.id).get()
+        doc = await raw_client.collection(User.Settings.name).document(u.id).get()
         assert doc.exists
 
     for sid in ["sdk-batch-1", "sdk-batch-2"]:
-        doc = await raw_client.collection("users").document(sid).get()
+        doc = await raw_client.collection(User.Settings.name).document(sid).get()
         assert doc.exists
 
 
@@ -237,7 +237,7 @@ async def test_field_alias_parity(initialized_models, raw_client):
     user = User(name="AliasTest", email="alias@test.com", age=99)
     await user.save()
 
-    doc = await raw_client.collection("users").document(user.id).get()
+    doc = await raw_client.collection(User.Settings.name).document(user.id).get()
     data = doc.to_dict()
 
     # Standard fields should be stored with their names (no aliases defined)
