@@ -38,7 +38,7 @@ async def test_batch_create_multiple(initialized_models, raw_client):
     # Verify all exist via raw SDK
     for u in users:
         assert u.id is not None
-        doc = await raw_client.collection("users").document(u.id).get()
+        doc = await raw_client.collection(User.Settings.name).document(u.id).get()
         assert doc.exists
         assert doc.to_dict()["name"] == u.name
 
@@ -61,8 +61,8 @@ async def test_batch_update_multiple(initialized_models, raw_client):
         (BatchOperation.UPDATE, u2),
     ])
 
-    doc1 = await raw_client.collection("users").document(u1.id).get()
-    doc2 = await raw_client.collection("users").document(u2.id).get()
+    doc1 = await raw_client.collection(User.Settings.name).document(u1.id).get()
+    doc2 = await raw_client.collection(User.Settings.name).document(u2.id).get()
     assert doc1.to_dict()["name"] == "Updated1"
     assert doc2.to_dict()["name"] == "Updated2"
 
@@ -82,8 +82,8 @@ async def test_batch_delete_multiple(initialized_models, raw_client):
         (BatchOperation.DELETE, u2),
     ])
 
-    doc1 = await raw_client.collection("users").document(u1.id).get()
-    doc2 = await raw_client.collection("users").document(u2.id).get()
+    doc1 = await raw_client.collection(User.Settings.name).document(u1.id).get()
+    doc2 = await raw_client.collection(User.Settings.name).document(u2.id).get()
     assert not doc1.exists
     assert not doc2.exists
 
@@ -110,17 +110,17 @@ async def test_batch_mixed_operations(initialized_models, raw_client):
     ])
 
     # Verify create
-    doc_new = await raw_client.collection("users").document(to_create.id).get()
+    doc_new = await raw_client.collection(User.Settings.name).document(to_create.id).get()
     assert doc_new.exists
     assert doc_new.to_dict()["name"] == "NewInBatch"
 
     # Verify update
-    doc_upd = await raw_client.collection("users").document(to_update.id).get()
+    doc_upd = await raw_client.collection(User.Settings.name).document(to_update.id).get()
     assert doc_upd.exists
     assert doc_upd.to_dict()["name"] == "WasUpdated"
 
     # Verify delete
-    doc_del = await raw_client.collection("users").document(to_delete.id).get()
+    doc_del = await raw_client.collection(User.Settings.name).document(to_delete.id).get()
     assert not doc_del.exists
 
 
@@ -159,13 +159,13 @@ async def test_batch_with_subcollections(initialized_models, raw_client):
     ]
     # Set parent path for subcollection resolution
     for p in posts:
-        object.__setattr__(p, "_parent_path", f"users/{user.id}")
+        object.__setattr__(p, "_parent_path", f"{User.Settings.name}/{user.id}")
 
     await Post.batch_write([(BatchOperation.CREATE, p) for p in posts])
 
     for p in posts:
         assert p.id is not None
-        doc = await raw_client.document(f"users/{user.id}/posts/{p.id}").get()
+        doc = await raw_client.document(f"{User.Settings.name}/{user.id}/{Post.Settings.name}/{p.id}").get()
         assert doc.exists
         assert doc.to_dict()["title"] == p.title
 

@@ -24,7 +24,7 @@ async def test_save_creates_document(initialized_models, raw_client):
     assert user.id is not None
 
     # Cross-validate with raw SDK
-    doc = await raw_client.collection("users").document(user.id).get()
+    doc = await raw_client.collection(User.Settings.name).document(user.id).get()
     assert doc.exists
     data = doc.to_dict()
     assert data["name"] == "Alice"
@@ -39,7 +39,7 @@ async def test_save_with_custom_id(initialized_models, raw_client):
 
     assert user.id == "custom-id-123"
 
-    doc = await raw_client.collection("users").document("custom-id-123").get()
+    doc = await raw_client.collection(User.Settings.name).document("custom-id-123").get()
     assert doc.exists
     assert doc.to_dict()["name"] == "Bob"
 
@@ -63,7 +63,7 @@ async def test_save_auto_generates_id(initialized_models, raw_client):
     assert user.id is not None
     assert len(user.id) > 0
 
-    doc = await raw_client.collection("users").document(user.id).get()
+    doc = await raw_client.collection(User.Settings.name).document(user.id).get()
     assert doc.exists
 
 
@@ -101,7 +101,7 @@ async def test_update_modifies_fields(initialized_models, raw_client):
     user.age = 23
     await user.update()
 
-    doc = await raw_client.collection("users").document(user.id).get()
+    doc = await raw_client.collection(User.Settings.name).document(user.id).get()
     data = doc.to_dict()
     assert data["name"] == "Eve Updated"
     assert data["age"] == 23
@@ -115,7 +115,7 @@ async def test_update_partial_fields(initialized_models, raw_client):
     user.name = "Frank Updated"
     await user.update(include={"name"})
 
-    doc = await raw_client.collection("users").document(user.id).get()
+    doc = await raw_client.collection(User.Settings.name).document(user.id).get()
     data = doc.to_dict()
     assert data["name"] == "Frank Updated"
     assert data["email"] == "frank@test.com"  # unchanged
@@ -139,7 +139,7 @@ async def test_delete_removes_document(initialized_models, raw_client):
 
     await user.delete()
 
-    doc = await raw_client.collection("users").document(uid).get()
+    doc = await raw_client.collection(User.Settings.name).document(uid).get()
     assert not doc.exists
 
 
@@ -187,7 +187,7 @@ async def test_model_dump_excludes_internal_fields(initialized_models):
 
 async def test_sdk_write_odm_read(initialized_models, raw_client):
     """Write a document via raw SDK and read it back via ODM."""
-    await raw_client.collection("users").document("sdk-user-1").set(
+    await raw_client.collection(User.Settings.name).document("sdk-user-1").set(
         {"name": "SDK User", "email": "sdk@test.com", "age": 40}
     )
 
