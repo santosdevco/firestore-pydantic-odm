@@ -1,5 +1,7 @@
 
 [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/santosdevco/firestore-pydantic-odm/publish.yml)](https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/publish.yml)
+
+[![Release Tests](https://img.shields.io/github/actions/workflow/status/santosdevco/firestore-pydantic-odm/release.yml?branch=master&label=release%20tests&logo=google-cloud)](https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/release.yml)
 [![PyPI](https://img.shields.io/pypi/v/firestore-pydantic-odm)](https://pypi.org/project/firestore-pydantic-odm/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/firestore-pydantic-odm)](https://pypi.org/project/firestore-pydantic-odm/)
 [![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
@@ -7,7 +9,9 @@
 # Firestore Pydantic ODM
 
 **Firestore Pydantic ODM** is a lightweight, fully-typed Object-Document Mapper for **Google Cloud Firestore**.  
-It combines [Pydantic]’s data-validation super-powers with Firestore’s scalable NoSQL store, offering async CRUD, batch writes, transactions, and **projections that request only the fields you need**—making queries faster and cheaper.
+It combines [Pydantic]'s data-validation super-powers with Firestore's scalable NoSQL store, offering async CRUD, batch writes, transactions, and **projections that request only the fields you need**—making queries faster and cheaper.
+
+> **✅ Fully Tested:** Every release runs 71 integration tests against a real Firestore instance across Python 3.9–3.12 and Pydantic v1/v2. [View test results →](https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/release.yml)
 
 ---
 
@@ -173,6 +177,4 @@ Set `FIRESTORE_EMULATOR_HOST=localhost:8080` to run tests against the local emul
 
 Distributed under the **BSD 3-Clause License**.
 See the [`LICENSE`](LICENSE) file for full text.
-
-
 
