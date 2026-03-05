@@ -10,22 +10,15 @@ permissions:
 
 jobs:
   # ── Step 1: Run integration tests against REAL Firestore ────────────
+  # NOTE: Only runs with Python 3.12 + Pydantic latest to minimize Firestore
+  # costs. The test.yml workflow validates all Python/Pydantic combinations
+  # using the emulator (no cost). Real Firestore tests validate that the ODM
+  # interacts correctly with the backend—behavior that doesn't change between
+  # Python/Pydantic versions.
   test-real-firestore:
     if: github.event.pull_request.merged == true
-    name: "Real Firestore — Py ${{ matrix.python-version }} / ${{ matrix.pydantic-version }}"
+    name: "Real Firestore — Python 3.12 / Pydantic latest"
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
-        pydantic-version:
-          - "pydantic>=1.5,<2.0"
-          - "pydantic>=2.0,<2.11"
-          - "pydantic>=2.11"
-        exclude:
-          - python-version: "3.12"
-            pydantic-version: "pydantic>=1.5,<2.0"
 
     steps:
       - uses: actions/checkout@v4
@@ -47,22 +40,23 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "📋 Integration Test Environment"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}"
-          echo "  GCP_DATABASE: ${{ secrets.GCP_DATABASE || '(default)' }}"
-          echo "  BATCH_LIMIT_TEST_SIZE: ${{ vars.BATCH_LIMIT_TEST_SIZE || '50' }}"
-          echo "  GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa-key.json"
-          echo "  SA Key file size: $(echo '${{ secrets.GCP_SA_KEY }}' | wc -c) chars"
+          echo "  Project ID: ${{ secrets.GCP_PROJECT_ID }}"
+          echo "  Database: ${{ secrets.GCP_DATABASE || '(default)' }}"
+          echo "  Run ID: ${{ github.run_id }}"
+          echo "  Collection Prefix: t${{ github.run_id }}_"
+          echo "  Batch Limit: ${{ vars.BATCH_LIMIT_TEST_SIZE || '50' }}"
+          echo "  Credentials: /tmp/sa-key.json"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
           cache: pip
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install "${{ matrix.pydantic-version }}"
+          pip install "pydantic>=2.11"
           pip install -e ".[dev]"
 
       - name: Configure GCP credentials
@@ -76,8 +70,9 @@ jobs:
         run: pytest tests/integration/ -v --tb=short
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa-key.json
-          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
-          DATABASE: ${{ secrets.GCP_DATABASE }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_DATABASE: ${{ secrets.GCP_DATABASE }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
           BATCH_LIMIT_TEST_SIZE: ${{ vars.BATCH_LIMIT_TEST_SIZE || '50' }}
 
       - name: Cleanup credentials
@@ -94,9 +89,10 @@ jobs:
       - name: Check result
         run: |
           if [[ "${{ needs.test-real-firestore.result }}" != "success" ]]; then
-            echo "Real Firestore tests failed — aborting release."
+            echo "❌ Real Firestore tests failed — aborting release."
             exit 1
           fi
+          echo "✅ Real Firestore tests passed — proceeding with release."
 
   # ── Step 2: Version bump + tag + publish ────────────────────────────
   release:

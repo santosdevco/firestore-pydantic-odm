@@ -1,0 +1,57 @@
+name: Cleanup Old Test Data
+
+on:
+  # Run monthly on the 1st at 00:00 UTC
+  schedule:
+    - cron: '0 0 1 * *'
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      days_old:
+        description: 'Delete collections older than N days'
+        required: false
+        default: '30'
+        type: string
+      dry_run:
+        description: 'Dry run (show what would be deleted without deleting)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: "Clean old test collections"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install google-cloud-firestore httpx
+      
+      - name: Configure GCP credentials
+        run: |
+          echo "${{ secrets.GCP_SA_KEY }}" | base64 -d > /tmp/sa-key.json
+      
+      - name: Run cleanup script
+        run: python scripts/cleanup_old_test_collections.py
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa-key.json
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_DATABASE: ${{ secrets.GCP_DATABASE }}
+          DAYS_OLD: ${{ inputs.days_old || '30' }}
+          DRY_RUN: ${{ inputs.dry_run || 'true' }}
+      
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f /tmp/sa-key.json
