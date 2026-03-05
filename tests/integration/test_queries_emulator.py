@@ -71,8 +71,8 @@ async def _collect(async_gen) -> list:
 async def test_find_all_no_filters(initialized_models):
     """find() with no filters returns all documents."""
     users = await _seed_users(initialized_models, "find_all_")
-    # Filter to only our test's documents
-    results = await _collect(User.find(filters=[User.id.in_([u.id for u in users])]))
+    # Filter to only our test's documents using email field
+    results = await _collect(User.find(filters=[User.email.in_([u.email for u in users])]))
     assert len(results) == 5
 
 
@@ -84,7 +84,7 @@ async def test_find_with_eq_filter(initialized_models):
     users = await _seed_users(initialized_models, "eq_filter_")
     results = await _collect(User.find(filters=[
         User.name == "Alice",
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ]))
     assert len(results) == 1
     assert results[0].name == "Alice"
@@ -95,7 +95,7 @@ async def test_find_with_ne_filter(initialized_models):
     users = await _seed_users(initialized_models, "ne_filter_")
     results = await _collect(User.find(filters=[
         User.name != "Alice",
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ]))
     assert len(results) == 4
     names = {r.name for r in results}
@@ -110,7 +110,7 @@ async def test_find_with_gt_filter(initialized_models):
     users = await _seed_users(initialized_models, "gt_filter_")
     results = await _collect(User.find(filters=[
         User.age > 30,
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ]))
     assert len(results) == 1
     assert results[0].name == "Charlie"
@@ -121,7 +121,7 @@ async def test_find_with_gte_filter(initialized_models):
     users = await _seed_users(initialized_models, "gte_filter_")
     results = await _collect(User.find(filters=[
         User.age >= 30,
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ]))
     assert len(results) == 3  # Alice(30), Charlie(35), Eve(30)
 
@@ -131,7 +131,7 @@ async def test_find_with_lt_filter(initialized_models):
     users = await _seed_users(initialized_models, "lt_filter_")
     results = await _collect(User.find(filters=[
         User.age < 25,
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ]))
     assert len(results) == 1
     assert results[0].name == "Diana"
@@ -142,7 +142,7 @@ async def test_find_with_lte_filter(initialized_models):
     users = await _seed_users(initialized_models, "lte_filter_")
     results = await _collect(User.find(filters=[
         User.age <= 25,
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ]))
     assert len(results) == 2  # Bob(25), Diana(20)
 
@@ -153,11 +153,11 @@ async def test_find_with_lte_filter(initialized_models):
 async def test_find_with_in_filter(initialized_models):
     """IN filter returns documents matching any value in the list."""
     users = await _seed_users(initialized_models, "in_filter_")
-    test_ids = [u.id for u in users]
+    test_emails = [u.email for u in users]
     results = await _collect(
         User.find(filters=[
             User.name.in_(["Alice", "Bob"]),
-            User.id.in_(test_ids)
+            User.email.in_(test_emails)
         ])
     )
     assert len(results) == 2
@@ -166,15 +166,21 @@ async def test_find_with_in_filter(initialized_models):
 
 
 async def test_find_with_not_in_filter(initialized_models):
-    """NOT_IN filter excludes documents matching values in the list."""
+    """NOT_IN filter excludes documents matching values in the list.
+    
+    Note: NOT_IN cannot be combined with IN, ARRAY_CONTAINS_ANY, or OR per Firestore constraints.
+    """
     users = await _seed_users(initialized_models, "not_in_filter_")
-    test_ids = [u.id for u in users]
+    # Use a range filter on email to isolate our test data instead of IN
+    # (NOT_IN cannot be used with IN in the same query)
     results = await _collect(
         User.find(filters=[
             User.name.not_in_(["Charlie", "Diana"]),
-            User.id.in_(test_ids)
+            User.email >= "a",  # Simple filter to ensure valid query
         ])
     )
+    # Filter results to only our test users
+    results = [r for r in results if r.id and r.id.startswith("not_in_filter_")]
     assert len(results) == 3
     names = {r.name for r in results}
     assert "Charlie" not in names
@@ -190,7 +196,7 @@ async def test_find_with_array_contains(initialized_models):
     results = await _collect(
         Product.find(filters=[
             Product.tags.array_contains("python"),
-            Product.id.in_([p.id for p in products])
+            Product.title.in_([p.title for p in products])
         ])
     )
     assert len(results) == 1
@@ -203,7 +209,7 @@ async def test_find_with_array_contains_any(initialized_models):
     results = await _collect(
         Product.find(filters=[
             Product.tags.array_contains_any(["python", "go"]),
-            Product.id.in_([p.id for p in products])
+            Product.title.in_([p.title for p in products])
         ])
     )
     assert len(results) == 2
@@ -221,7 +227,7 @@ async def test_find_with_multiple_filters(initialized_models):
         User.find(filters=[
             User.age >= 25,
             User.age <= 30,
-            User.id.in_([u.id for u in users])
+            User.email.in_([u.email for u in users])
         ])
     )
     assert len(results) == 3  # Alice(30), Bob(25), Eve(30)
@@ -237,7 +243,7 @@ async def test_find_order_by_ascending(initialized_models):
     users = await _seed_users(initialized_models, "order_asc_")
     results = await _collect(
         User.find(
-            filters=[User.id.in_([u.id for u in users])],
+            filters=[User.email.in_([u.email for u in users])],
             order_by=(User.name, OrderByDirection.ASCENDING)
         )
     )
@@ -252,7 +258,7 @@ async def test_find_order_by_descending(initialized_models):
     users = await _seed_users(initialized_models, "order_desc_")
     results = await _collect(
         User.find(
-            filters=[User.id.in_([u.id for u in users])],
+            filters=[User.email.in_([u.email for u in users])],
             order_by=(User.name, OrderByDirection.DESCENDING)
         )
     )
@@ -268,7 +274,7 @@ async def test_find_order_by_multiple_fields(initialized_models):
     users = await _seed_users(initialized_models, "order_multi_")
     results = await _collect(
         User.find(
-            filters=[User.id.in_([u.id for u in users])],
+            filters=[User.email.in_([u.email for u in users])],
             order_by=[
                 (User.age, OrderByDirection.ASCENDING),
                 (User.name, OrderByDirection.ASCENDING),
@@ -287,7 +293,7 @@ async def test_find_with_limit(initialized_models):
     """limit restricts the number of returned results."""
     users = await _seed_users(initialized_models, "limit_")
     results = await _collect(User.find(
-        filters=[User.id.in_([u.id for u in users])],
+        filters=[User.email.in_([u.email for u in users])],
         limit=2
     ))
     assert len(results) == 2
@@ -298,16 +304,16 @@ async def test_find_with_offset(initialized_models):
     from firestore_pydantic_odm import OrderByDirection
 
     users = await _seed_users(initialized_models, "offset_")
-    test_ids = [u.id for u in users]
+    test_emails = [u.email for u in users]
     all_results = await _collect(
         User.find(
-            filters=[User.id.in_(test_ids)],
+            filters=[User.email.in_(test_emails)],
             order_by=(User.name, OrderByDirection.ASCENDING)
         )
     )
     offset_results = await _collect(
         User.find(
-            filters=[User.id.in_(test_ids)],
+            filters=[User.email.in_(test_emails)],
             order_by=(User.name, OrderByDirection.ASCENDING),
             offset=2,
         )
@@ -323,7 +329,7 @@ async def test_find_with_limit_and_offset(initialized_models):
     users = await _seed_users(initialized_models, "limit_offset_")
     page = await _collect(
         User.find(
-            filters=[User.id.in_([u.id for u in users])],
+            filters=[User.email.in_([u.email for u in users])],
             order_by=(User.name, OrderByDirection.ASCENDING),
             offset=1,
             limit=2,
@@ -340,7 +346,7 @@ async def test_find_one_returns_first(initialized_models):
     users = await _seed_users(initialized_models, "find_one_")
     result = await User.find_one(filters=[
         User.name == "Bob",
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ])
     assert result is not None
     assert result.name == "Bob"
@@ -351,7 +357,7 @@ async def test_find_one_no_match_returns_none(initialized_models):
     users = await _seed_users(initialized_models, "find_one_none_")
     result = await User.find_one(filters=[
         User.name == "Nonexistent",
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ])
     assert result is None
 
@@ -364,7 +370,7 @@ async def test_count_with_filters(initialized_models):
     users = await _seed_users(initialized_models, "count_filter_")
     total = await User.count(filters=[
         User.age == 30,
-        User.id.in_([u.id for u in users])
+        User.email.in_([u.email for u in users])
     ])
     assert total == 2  # Alice and Eve
 
@@ -372,5 +378,5 @@ async def test_count_with_filters(initialized_models):
 async def test_count_all(initialized_models):
     """count() with empty filters returns total document count."""
     users = await _seed_users(initialized_models, "count_all_")
-    total = await User.count(filters=[User.id.in_([u.id for u in users])])
+    total = await User.count(filters=[User.email.in_([u.email for u in users])])
     assert total == 5
