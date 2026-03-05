@@ -13,14 +13,15 @@ from .models import User, Product
 
 pytestmark = pytest.mark.asyncio
 
-# Multi-field ordering requires a composite index that would need to be
-# created for each unique collection prefix in real Firestore
-_requires_emulator = pytest.mark.skipif(
-    not os.environ.get("FIRESTORE_EMULATOR_HOST"),
+# Multi-field ordering requires a composite index. Works in:
+# - Emulator (indexes auto-created)
+# - Real Firestore with USE_CI_FIXED_PREFIX=true (pre-deployed indexes)
+_requires_emulator_or_ci_prefix = pytest.mark.skipif(
+    not os.environ.get("FIRESTORE_EMULATOR_HOST") and 
+    os.environ.get("USE_CI_FIXED_PREFIX", "").lower() != "true",
     reason=(
         "Multi-field ordering requires a Firestore composite index. "
-        "With collection prefixes, the index name changes per run, "
-        "making it impractical for real Firestore. Run with emulator."
+        "Run with emulator or set USE_CI_FIXED_PREFIX=true with deployed indexes."
     ),
 )
 
@@ -266,7 +267,7 @@ async def test_find_order_by_descending(initialized_models):
     assert names == sorted(names, reverse=True)
 
 
-@_requires_emulator
+@_requires_emulator_or_ci_prefix
 async def test_find_order_by_multiple_fields(initialized_models):
     """Multi-field ordering works correctly."""
     from firestore_pydantic_odm import OrderByDirection

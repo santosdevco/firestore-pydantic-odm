@@ -35,14 +35,24 @@ IS_EMULATOR = bool(EMULATOR_HOST)
 
 # ── Collection prefix for run isolation ──────────────────────────────────────
 
-# Generate a unique prefix per test execution to isolate concurrent runs
-# GitHub Actions provides GITHUB_RUN_ID; locally we generate a random ID
-RUN_ID = os.environ.get("GITHUB_RUN_ID", uuid.uuid4().hex[:8])
+# CI Mode: Use fixed prefix "citest_" to enable pre-created composite indexes
+# This allows all tests (including multi-field ordering and collection-group
+# queries) to run against real Firestore in CI/CD pipelines.
+#
+# Local Mode: Use dynamic prefix based on RUN_ID for data isolation when
+# running multiple test sessions concurrently.
+USE_CI_FIXED_PREFIX = os.environ.get("USE_CI_FIXED_PREFIX", "").lower() == "true"
 
-# Only use prefix in real Firestore to avoid data collisions between runs
-# Emulator doesn't need it (each run gets a fresh isolated instance)
-USE_COLLECTION_PREFIX = not IS_EMULATOR
-COLLECTION_PREFIX = f"t{RUN_ID}_" if USE_COLLECTION_PREFIX else ""
+if USE_CI_FIXED_PREFIX and not IS_EMULATOR:
+    # Fixed prefix for CI - enables composite indexes
+    COLLECTION_PREFIX = "citest_"
+    USE_COLLECTION_PREFIX = True
+    logger.info("Using CI fixed prefix for composite index support")
+else:
+    # Dynamic prefix for local development or emulator
+    RUN_ID = os.environ.get("GITHUB_RUN_ID", uuid.uuid4().hex[:8])
+    USE_COLLECTION_PREFIX = not IS_EMULATOR
+    COLLECTION_PREFIX = f"t{RUN_ID}_" if USE_COLLECTION_PREFIX else ""
 
 logger.info(
     "Test environment: %s | Prefix: %s",
@@ -118,18 +128,23 @@ def raw_client(firestore_db):
 async def clean_firestore(firestore_db):
     """Clean test data based on environment.
     
-    Emulator: Wipe all data BEFORE and AFTER each test (fast, no cost).
-    Real Firestore: NO cleanup (use run-specific prefixes for isolation).
+    Emulator: Wipe all data via REST API BEFORE and AFTER each test (fast).
+    CI fixed prefix: Recursively delete all docs in prefixed collections
+                     BEFORE each test so every test starts clean.
+    Real Firestore (dynamic prefix): NO cleanup — run-specific prefixes
+                                     provide isolation, cleanup runs separately.
     """
     if IS_EMULATOR:
-        # Clean BEFORE test to ensure fresh state
         await _perform_cleanup(firestore_db)
-    
+    elif USE_CI_FIXED_PREFIX:
+        await _cleanup_ci_collections(firestore_db.client)
+
     yield  # ← test runs here
 
     if IS_EMULATOR:
-        # Clean AFTER test to avoid data leaks
         await _perform_cleanup(firestore_db)
+    elif USE_CI_FIXED_PREFIX:
+        await _cleanup_ci_collections(firestore_db.client)
 
 
 async def _perform_cleanup(firestore_db):
@@ -160,6 +175,37 @@ async def _perform_cleanup(firestore_db):
             "Data may leak between tests.",
             exc,
         )
+
+
+async def _cleanup_ci_collections(client):
+    """Recursively delete all documents in the fixed CI prefixed collections.
+
+    For each top-level collection with the 'citest_' prefix:
+      1. Stream all documents
+      2. For each document, delete every subcollection document first
+      3. Then delete the top-level document itself
+
+    This ensures collection-group queries always see a clean state.
+    """
+    top_level_names = [
+        f"{COLLECTION_PREFIX}{original}"
+        for original in ORIGINAL_COLLECTION_NAMES.values()
+        # Only top-level collections (no parent setting)
+        if not getattr(
+            next(m for m in ALL_MODELS if ORIGINAL_COLLECTION_NAMES[m] == original).Settings,
+            "parent",
+            None,
+        )
+    ]
+    for coll_name in top_level_names:
+        coll_ref = client.collection(coll_name)
+        async for doc_snap in coll_ref.stream():
+            # Delete all subcollections under this document first
+            async for sub_coll in doc_snap.reference.collections():
+                async for sub_doc in sub_coll.stream():
+                    await sub_doc.reference.delete()
+            await doc_snap.reference.delete()
+    logger.debug("[conftest] CI collections cleaned: %s", top_level_names)
 
 
 @pytest_asyncio.fixture
