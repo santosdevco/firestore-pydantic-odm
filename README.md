@@ -1,28 +1,57 @@
-
 [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/santosdevco/firestore-pydantic-odm/publish.yml)](https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/publish.yml)
-
 [![Release Tests](https://img.shields.io/github/actions/workflow/status/santosdevco/firestore-pydantic-odm/release.yml?branch=master&label=release%20tests&logo=google-cloud)](https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/release.yml)
 [![PyPI](https://img.shields.io/pypi/v/firestore-pydantic-odm)](https://pypi.org/project/firestore-pydantic-odm/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/firestore-pydantic-odm)](https://pypi.org/project/firestore-pydantic-odm/)
-[![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![Python Versions](https://img.shields.io/pypi/pyversions/firestore-pydantic-odm)](https://pypi.org/project/firestore-pydantic-odm/)
+[![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 # Firestore Pydantic ODM
 
-**Firestore Pydantic ODM** is a lightweight, fully-typed Object-Document Mapper for **Google Cloud Firestore**.  
-It combines [Pydantic]'s data-validation super-powers with Firestore's scalable NoSQL store, offering async CRUD, batch writes, transactions, and **projections that request only the fields you need**—making queries faster and cheaper.
+**A modern async Object-Document Mapper (ODM) for Google Cloud Firestore built with Pydantic.**
 
-> **✅ Fully Tested:** Every release runs 71 integration tests against a real Firestore instance across Python 3.9–3.12 and Pydantic v1/v2. [View test results →](https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/release.yml)
+Firestore Pydantic ODM provides a fully typed, asynchronous, and Pythonic interface for Google Cloud Firestore. It combines **Pydantic's validation** with Firestore's scalability, allowing you to build applications with clean models, async CRUD operations, transactions, batch writes, subcollections, and efficient field projections.
+
+<p align="center">
+
+[![Documentation](https://img.shields.io/badge/📖-Documentation-2ea44f?style=for-the-badge)](https://fpo-python.santosdev.com)
+
+</p>
+
+> 📚 **New to Firestore Pydantic ODM?**
+>
+> Start with the documentation:
+>
+> **https://fpo-python.santosdev.com**
+
+## Quick Links
+
+| | |
+|---|---|
+| 🚀 Installation | https://fpo-python.santosdev.com/installation |
+| ⚡ Quick Start | https://fpo-python.santosdev.com/quickstart |
+| 📚 Concepts | https://fpo-python.santosdev.com/concepts/models |
+| 🔍 Querying | https://fpo-python.santosdev.com/guides/querying |
+| 📖 API Reference | https://fpo-python.santosdev.com/api/base-firestore-model |
 
 ---
 
-## Features
+## Why Firestore Pydantic ODM?
 
-* **Asynchronous CRUD:** Full support for creating, reading, updating, and deleting Firestore documents using `async/await`.
-* **Validation with Pydantic:** Define your data models with automatic validation, ensuring data integrity before it reaches the database.
-* **Advanced Queries:** Perform searches with filters, projections (selecting only specific fields), and ordering.
-* **Batch Operations and Transactions:** Group multiple write operations and execute transactions atomically for greater efficiency and consistency.
-* **Emulator and Testing Support:** Easily switch to the Firestore emulator or plug in mocks for unit testing.
-* **Seamless Integration:** Fits smoothly into any Python project with minimal setup.
+- ✅ Fully asynchronous API (`async` / `await`)
+- ✅ Pydantic v1 & v2 support
+- ✅ Fully typed queries and models
+- ✅ CRUD operations
+- ✅ Batch writes & transactions
+- ✅ Subcollections
+- ✅ Field projections (fetch only the fields you need)
+- ✅ Firestore Emulator support
+- ✅ Built for production
+
+> **Fully Tested**
+>
+> Every release runs integration tests against a real Firestore instance across Python 3.9–3.12 and both Pydantic v1 and v2.
+>
+> **View CI results →**
+> https://github.com/santosdevco/firestore-pydantic-odm/actions/workflows/release.yml
 
 ---
 
