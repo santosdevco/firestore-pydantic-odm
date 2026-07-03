@@ -207,3 +207,4 @@ Set `FIRESTORE_EMULATOR_HOST=localhost:8080` to run tests against the local emul
 Distributed under the **BSD 3-Clause License**.
 See the [`LICENSE`](LICENSE) file for full text.
 
+
