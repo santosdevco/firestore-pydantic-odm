@@ -1,0 +1,71 @@
+name: Integration Tests (Manual)
+
+on:
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  test-real-firestore:
+    name: "Real Firestore — Python 3.12 / Pydantic latest"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          missing=()
+          [[ -z "${{ secrets.GCP_SA_KEY }}"      ]] && missing+=("GCP_SA_KEY")
+          [[ -z "${{ secrets.GCP_PROJECT_ID }}"  ]] && missing+=("GCP_PROJECT_ID")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "❌ The following required GitHub secrets are not set: ${missing[*]}"
+            echo "   Configure them at: Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "✅ All required secrets are present."
+
+      - name: Show environment configuration
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📋 Integration Test Environment"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Project ID: ${{ secrets.GCP_PROJECT_ID }}"
+          echo "  Database: ${{ secrets.GCP_DATABASE || '(default)' }}"
+          echo "  Collection Prefix: citest_ (fixed for composite indexes)"
+          echo "  Batch Limit: ${{ vars.BATCH_LIMIT_TEST_SIZE || '50' }}"
+          echo "  Credentials: /tmp/sa-key.json"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install "pydantic>=2.11"
+          pip install -e ".[dev]"
+
+      - name: Configure GCP credentials
+        run: |
+          echo "${{ secrets.GCP_SA_KEY }}" | base64 -d > /tmp/sa-key.json
+
+      - name: Run unit tests
+        run: pytest tests/ -v --tb=short --ignore=tests/integration
+
+      - name: Run integration tests (real Firestore)
+        run: pytest tests/integration/ -v --tb=short
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa-key.json
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_DATABASE: ${{ secrets.GCP_DATABASE }}
+          USE_CI_FIXED_PREFIX: "true"
+          BATCH_LIMIT_TEST_SIZE: ${{ vars.BATCH_LIMIT_TEST_SIZE || '50' }}
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f /tmp/sa-key.json
